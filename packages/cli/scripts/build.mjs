@@ -121,14 +121,17 @@ export const readRootPackageVersion = async ({ root = projectRoot } = {}) => {
 };
 
 export const resolveBuildOptions = (args = [], env = process.env) => {
-  const desktopAgent = args.includes(desktopAgentBuildFlag);
+  // --release and --desktop-agent both mean "ship it": minified, no sourcemap.
+  // E2E coverage builds must keep raw symbols + source map for c8 to map back.
+  const release =
+    args.includes(desktopAgentBuildFlag) || args.includes("--release") || args.includes("--minify");
   const e2eCoverage = env.ZCODE_E2E_COVERAGE === "1";
 
   return {
     // desktop-agent 正常发布仍需压缩且不携带 map；E2E coverage
     // 专用构建必须保留原始符号和 source map，c8 才能回映到各 package 的 TS 源码。
-    minify: desktopAgent && !e2eCoverage,
-    sourcemap: e2eCoverage || !desktopAgent,
+    minify: release && !e2eCoverage,
+    sourcemap: e2eCoverage || !release,
   };
 };
 

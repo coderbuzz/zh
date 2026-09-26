@@ -12,28 +12,43 @@ with `--mode build|edit|plan` when the task warrants it.
 
 ## Install
 
-```sh
-git clone https://github.com/coderbuzz/zheadless.git
-cd zheadless
-sh install.sh
-```
-
-The installer checks for [Bun](https://bun.sh) and installs it if missing,
-runs `bun install`, builds the workspace packages with `build-all.sh`, and
-symlinks the launcher into `~/.local/bin`. To install the symlink elsewhere:
+One line, no git required:
 
 ```sh
-PREFIX=/usr/local/bin sh install.sh
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-To remove the symlink:
+The installer downloads the latest release, verifies its SHA256 checksums,
+symlinks `zh` into `~/.local/bin`, and smoke tests it. Pick a method
+explicitly if you prefer:
 
 ```sh
-sh install.sh --uninstall
+# standalone executable per OS/arch, no bun or node needed (default)
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=binary
+
+# minified bundle + launcher; runs with bun, falls back to node
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=bundle
+
+# build from source on the target machine; needs bun
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=source
 ```
 
-After installing, `zh` is callable from any console. Verify with
+Files live under `~/.local/share/zheadless` (`--home` to change) and the
+launcher goes to `~/.local/bin/zh` (`--prefix` to change). Re-running the
+installer repairs an existing install; remove everything with:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --uninstall
+```
+
+From a clone of this repository, `sh install.sh` does the same as
+`--method=source` plus a `bun install` refresh. Verify any install with
 `zh version`.
+
+Releases are built by GitHub Actions on every `v*` tag: a platform
+independent bundle plus standalone binaries for linux-x64, linux-arm64,
+darwin-x64, and darwin-arm64. The darwin binaries are unsigned; macOS may
+ask you to clear the quarantine flag before first run.
 
 ## Authentication
 
@@ -91,10 +106,11 @@ directories is enough; the next run picks it up.
 
 Bun is the priority runtime. The `zh` launcher (a plain `sh` script) checks
 for `bun` first, adds `~/.bun/bin` to `PATH` for fresh installs, and runs the
-TypeScript entry `packages/cli/src/main.ts` directly, so no bundling step
-stands between a code change and the next run. Only when bun is absent does
-the launcher fall back to `node` with a prebuilt `packages/cli/dist/zcode.cjs`,
-which this repository does not build by default.
+freshest entry it can find: the TypeScript source in a source checkout, or
+the prebuilt `dist/zcode.cjs` in a bundle install. Only when bun is absent
+does the launcher fall back to `node` with the bundle. The `--method=binary`
+install skips the launcher entirely: `zh` is a standalone executable with
+the bun runtime embedded.
 
 ## Build
 
@@ -108,10 +124,10 @@ This compiles every workspace package with `tsc` in dependency order
 automatically when the generated file is missing. `packages/formal-proof`
 is a Vite demo app outside the main build.
 
-`bun run build` inside `packages/cli` additionally produces a
-self-contained node bundle at `packages/cli/dist/zcode.cjs` (about 28 MB),
-which the launcher uses as its node fallback; the repository does not build
-it by default.
+`bun run build` inside `packages/cli` additionally produces the node bundle
+at `packages/cli/dist/zcode.cjs`: plain `bun run build` keeps a debug source
+map, `bun run build -- --release` minifies and drops the map (about 14 MB),
+which is what release assets contain.
 
 ## Layout
 
