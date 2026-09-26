@@ -159,7 +159,10 @@ from a single tag push.
 Known limits: the interactive TUI is not part of this repository (the
 upstream `@zcode/tui` package was not extracted, so `zh tui` fails with an
 error rather than opening a terminal UI); there are no Windows binaries yet;
-the darwin binaries are unsigned.
+the darwin binaries are unsigned. Browser use (`--browser-use=headless`)
+works from a source checkout, where `playwright-core` is installed; the
+binary and bundle builds leave `playwright-core` external, so driving a
+browser through them is not guaranteed.
 
 ## License
 
