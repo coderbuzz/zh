@@ -63,11 +63,15 @@ fi
 
 say() { printf '\n== %s\n' "$1"; }
 
-fetch() { # fetch <url> <outfile>
+fetch() { # fetch <url-or-release-asset-name> <outfile>
+  case $1 in
+    http*) url=$1 ;;
+    *) url="$BASE_URL/$1" ;;
+  esac
   if [ -n "$ASSET_DIR" ]; then
-    cp "$ASSET_DIR/$1" "$2"
+    cp "$ASSET_DIR/$(basename "$1")" "$2"
   else
-    curl -fSL --retry 3 -o "$2" "$1"
+    curl -fSL --retry 3 -o "$2" "$url"
   fi
 }
 
@@ -108,8 +112,8 @@ esac
 if [ -z "$METHOD" ]; then
   METHOD="bundle"
   if [ -z "$ASSET_DIR" ]; then
-    if fetch_stdout "https://api.github.com/repos/$REPO/releases/$TAG" |
-      grep -q "zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz"; then
+    if fetch_stdout "https://api.github.com/repos/$REPO/releases/tags/$TAG" |
+      grep -q "\"name\": \"zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz\""; then
       METHOD="binary"
     fi
   elif [ -f "$ASSET_DIR/zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz" ]; then
