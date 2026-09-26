@@ -12,7 +12,7 @@
 # Usage:
 #   install-remote.sh [--method=binary|bundle|source] [--version=TAG]
 #                     [--home=DIR] [--prefix=DIR] [--asset-dir=DIR]
-#                     [--no-verify] [--uninstall]
+#                     [--no-verify] [--no-browser-driver] [--uninstall]
 #
 # --asset-dir loads prebuilt assets from a local directory (offline/dev runs).
 set -eu
@@ -27,6 +27,7 @@ INSTALL_HOME="$DEFAULT_HOME"
 PREFIX="$DEFAULT_PREFIX"
 ASSET_DIR=""
 NO_VERIFY=0
+NO_BROWSER_DRIVER=0
 
 for arg in "$@"; do
   case $arg in
@@ -36,6 +37,7 @@ for arg in "$@"; do
     --prefix=*) PREFIX=${arg#--prefix=} ;;
     --asset-dir=*) ASSET_DIR=${arg#--asset-dir=} ;;
     --no-verify) NO_VERIFY=1 ;;
+    --no-browser-driver) NO_BROWSER_DRIVER=1 ;;
     --uninstall) METHOD="uninstall" ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -195,6 +197,19 @@ case $METHOD in
     exit 2
     ;;
 esac
+
+# binary/bundle installs get the playwright-core driver as a separate asset;
+# source installs already have it from bun install.
+if [ "$METHOD" = "binary" ] || [ "$METHOD" = "bundle" ]; then
+  if [ "$NO_BROWSER_DRIVER" = "0" ] && [ -n "$TAG" ]; then
+    say "installing browser driver (playwright-core)"
+    DRIVER_TMP=$(mktemp -d)
+    download_asset "playwright-core-$TAG.tar.gz" "$DRIVER_TMP/pwc.tar.gz"
+    mkdir -p "$INSTALL_HOME/node_modules"
+    tar -xzf "$DRIVER_TMP/pwc.tar.gz" -C "$INSTALL_HOME/node_modules"
+    rm -rf "$DRIVER_TMP"
+  fi
+fi
 
 echo "zheadless-install: method=$METHOD version=${TAG:-local} date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   > "$INSTALL_HOME/.zheadless-install"

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { homedir, platform, tmpdir } from "node:os";
-import { dirname, join, normalize, sep } from "node:path";
+import { dirname, join, normalize, resolve, sep } from "node:path";
 import type { PlaywrightChromiumModule } from "@zcode/adapters/browser";
 
 declare const __CLI_VERSION__: string;
@@ -33,13 +33,52 @@ export async function loadCliPlaywrightChromium(): Promise<PlaywrightChromiumMod
   // node:sea 只存在于 Node 单文件可执行构建；Bun 没有该内置模块，按非 SEA 处理。
   const sea = process.getBuiltinModule?.("node:sea") as SeaModule | undefined;
   if (!sea || !sea.isSea()) {
-    return (await import("playwright-core")) as PlaywrightChromiumModule;
+    try {
+      return (await import("playwright-core")) as PlaywrightChromiumModule;
+    } catch (error) {
+      // binary/bundle install 会把 playwright-core 作为 release asset 装到
+      // <install root>/node_modules；bun --compile 二进制里的 bare import
+      // 看不到它，只能从真实可执行文件位置向上找。
+      const bundledRequire = findBundledPlaywrightRequire();
+      if (!bundledRequire) throw error;
+      return bundledRequire("playwright-core") as PlaywrightChromiumModule;
+    }
   }
 
   const runtimeDirectory = await ensureSeaPlaywrightRuntime(sea);
   const require = createRequire(join(runtimeDirectory, "zcode-playwright-loader.cjs"));
   return require("playwright-core") as PlaywrightChromiumModule;
 }
+
+const findBundledPlaywrightRequire = (() => {
+  let cached: NodeRequire | null | undefined; // null = searched and not found
+  return (): NodeRequire | undefined => {
+    if (cached) return cached;
+    if (cached === null) return undefined;
+    // 入口真实路径优先（cjs bundle）；bun --compile 的 argv[1] 是虚拟
+    // $bunfs 路径，realpath 失败后退回真实可执行文件位置。
+    let anchor = dirname(process.execPath);
+    try {
+      anchor = dirname(realpathSync(resolve(process.argv[1] ?? process.execPath)));
+    } catch {
+      // keep execPath anchor
+    }
+    for (let depth = 0; depth < 8; depth += 1) {
+      const require = createRequire(join(anchor, "node_modules", "resolver.cjs"));
+      try {
+        require.resolve("playwright-core/package.json");
+        cached = require;
+        return require;
+      } catch {
+        const parent = dirname(anchor);
+        if (parent === anchor) break;
+        anchor = parent;
+      }
+    }
+    cached = null;
+    return undefined;
+  };
+})();
 
 async function ensureSeaPlaywrightRuntime(sea: SeaModule): Promise<string> {
   const manifest = readManifest(sea);
