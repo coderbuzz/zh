@@ -30,8 +30,9 @@ const MARKER_FILE = "playwright-manifest.json";
 const PACKAGE_JSON_PATH = "node_modules/playwright-core/package.json";
 
 export async function loadCliPlaywrightChromium(): Promise<PlaywrightChromiumModule> {
-  const sea = await import("node:sea");
-  if (!sea.isSea()) {
+  // node:sea 只存在于 Node 单文件可执行构建；Bun 没有该内置模块，按非 SEA 处理。
+  const sea = process.getBuiltinModule?.("node:sea") as SeaModule | undefined;
+  if (!sea || !sea.isSea()) {
     return (await import("playwright-core")) as PlaywrightChromiumModule;
   }
 

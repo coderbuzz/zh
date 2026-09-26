@@ -131,7 +131,7 @@ which is what release assets contain.
 
 ## Layout
 
-- `packages/cli` — entry point and command routing (prompt, TUI, protocol servers)
+- `packages/cli` — entry point and command routing (prompt, protocol servers)
 - `packages/core` — runtime, output, environment
 - `packages/bootstrap` — agent bootstrapping: model factory, skills, auth, telemetry
 - `packages/provider`, `packages/provider-node` — AI SDK providers
@@ -140,13 +140,28 @@ which is what release assets contain.
 - `packages/contracts`, `packages/shared`, `packages/shared-types` — types and shared code
 - `packages/i18n`, `packages/telemetry`, `packages/model-option-map` — support modules
 - `packages/zcode-cua` — computer-use broker contracts
-- `bin/zh` — launcher script; `install.sh` — installer
+- `bin/zh` — launcher script; `install.sh` — source installer;
+  `install-remote.sh` — one-line remote installer (binary, bundle, or source)
+- `.github/workflows/release.yml` — release pipeline: bundle, standalone
+  binaries, and checksums published on every `v*` tag
 - `config/provider/zcode-builtin.json` — bundled provider/model catalog the CLI
   seeds from on first run
 - `patches/` — pinned `@ai-sdk` patches applied on install
 
 ## Status
 
-Work in progress. The headless prompt path, protocol servers, skills, and the
-Bun runtime are verified working. The single-binary (SEA) bundling pipeline
-from upstream zcode is not part of this repository yet.
+Ready for unattended work. Verified against this codebase: all three install
+methods completed a real headless agent prompt on a clean environment,
+checksum verification included; a build from a wiped workspace (`node_modules`
+and `dist` removed) passes end to end; releases are produced by GitHub Actions
+from a single tag push.
+
+Known limits: the interactive TUI is not part of this repository (the
+upstream `@zcode/tui` package was not extracted, so `zh tui` fails with an
+error rather than opening a terminal UI); there are no Windows binaries yet;
+the darwin binaries are unsigned.
+
+## License
+
+[MIT](LICENSE). This repository builds on code extracted from the
+[zcode](https://github.com/coderbuzz/zcode) project.
