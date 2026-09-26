@@ -88,13 +88,52 @@ Other flags worth knowing:
 
 ### Protocol mode
 
-For long-lived orchestration, `app-server` and `agent-server` expose the
-ZCode Protocol over stdio. The orchestrator keeps the process alive and
-exchanges JSON frames instead of spawning `zh` per prompt:
+For long-lived orchestration, `app-server` and `agent-server` run the ZCode
+Protocol server: a process that speaks newline-delimited JSON frames on stdio
+and stays alive across many prompts, so the orchestrator keeps one connection
+instead of spawning `zh` per request.
 
 ```sh
 zh app-server
 ```
+
+Both commands start the same protocol server; the two names match the host
+roles upstream zcode uses:
+
+- **`app-server`** fronts the whole application surface: the session index,
+  workspace config, multiple conversations, attachments, and usage stats.
+  Use it when your orchestrator is a service that manages many sessions or
+  workspaces, for example a pool of agents behind a dashboard. This is how
+  the zcode desktop, web, and mobile clients drive the CLI.
+- **`agent-server`** is the same server used as a single-agent endpoint: one
+  process, one workspace, one conversation stream. Use it when a job or an
+  editor extension owns exactly one agent and wants a persistent connection,
+  for example a CI bot that keeps a session warm across steps.
+
+The wire contract lives in `packages/shared/src/zcode-protocol-v4/` (method
+table in `transport.ts`) and the dispatcher in
+`packages/bootstrap/src/zcode-protocol/server.ts`. Methods include
+`v4/connection/flow`, `v4/controller/subscribe`, `v4/conversation/subscribe`,
+`v4/conversation/rowsRange`, the `v4/conversation/workflowRun*` family,
+`v4/attachment/*`, `v4/usage/stats`, and `v4/command`.
+
+An orchestrator skeleton looks like this (exact frame params come from the
+schema files above):
+
+```js
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
+
+const server = spawn("zh", ["app-server"], { stdio: ["pipe", "pipe", "pipe"] });
+const frames = createInterface(server.stdout);
+frames.on("line", (line) => console.log("frame:", JSON.parse(line)));
+
+const send = (frame) => server.stdin.write(`${JSON.stringify(frame)}\n`);
+send({ jsonrpc: "2.0", id: 1, method: "v4/connection/flow", params: {} });
+```
+
+Killing the process (or closing its stdin) shuts the session down cleanly;
+the server reports `Protocol input closed` on stderr and exits.
 
 ### Skills
 
@@ -152,19 +191,29 @@ bundler; `ZCODE_BUILD_VERSION=<tag>` overrides the version reported by
 
 ## Status
 
-Ready for unattended work. Verified against this codebase: all three install
-methods completed a real headless agent prompt on a clean environment,
-checksum verification included; a build from a wiped workspace (`node_modules`
-and `dist` removed) passes end to end; releases are produced by GitHub Actions
-from a single tag push.
+Production ready for unattended headless work. Everything below was verified
+on this codebase, most recently against release v0.1.3:
 
-Known limits: the interactive TUI is not part of this repository (the
-upstream `@zcode/tui` package was not extracted, so `zh tui` fails with an
-error rather than opening a terminal UI); there are no Windows binaries yet;
-the darwin binaries are unsigned. Browser use (`--browser-use=headless`)
-drives a real Chromium on every install method, verified down to executing
-JavaScript in the page; the machine still needs a browser executable, passed
-with `--browser-executable` (or the bundled driver's own discovery).
+- One-line install on a bare Debian 12 container (no git, no bun, no node
+  preinstalled): the installer picked the standalone binary, verified both
+  checksums, and `zh version` reported the release tag.
+- A full agent loop ran in that container with only two credential files
+  placed in `~/.zcode`; `zh -p` returned the expected answer and
+  `--output-format json` carried session and usage data for orchestrators.
+- Browser use ran a real headless Chromium in the same container: the agent
+  executed `navigator.userAgent` in the page through `--browser-use=headless`
+  and returned the exact value, so tool calls, page evaluation, and the
+  shipped plugin trees all work from a cold start.
+- Builds are reproducible from a wiped workspace, the release pipeline
+  publishes on a tag push alone, and the CLI version comes from the tag, not
+  from a hand-edited field.
+
+Known limits, stated plainly: no interactive TUI (the upstream `@zcode/tui`
+package was not extracted; `zh tui` fails with a clear error); no Windows
+binaries yet; darwin binaries are unsigned; the protocol server's frame-level
+handshake is documented as a schema reference rather than a worked example.
+
+If you find a gap, the fastest path is `zh -p` against this repository.
 
 ## License
 
