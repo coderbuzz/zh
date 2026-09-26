@@ -160,9 +160,10 @@ Known limits: the interactive TUI is not part of this repository (the
 upstream `@zcode/tui` package was not extracted, so `zh tui` fails with an
 error rather than opening a terminal UI); there are no Windows binaries yet;
 the darwin binaries are unsigned. Browser use (`--browser-use=headless`)
-works from a source checkout, where `playwright-core` is installed; the
-binary and bundle builds leave `playwright-core` external, so driving a
-browser through them is not guaranteed.
+drives a real Chromium end to end on the source and bundle installs; the
+standalone binary installs the `playwright-core` driver but its node-repl
+browser bridge is not registered yet, so prefer `--method=bundle` when the
+orchestrator needs browsing.
 
 ## License
 

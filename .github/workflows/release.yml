@@ -44,6 +44,11 @@ jobs:
           cp packages/cli/dist/THIRD_PARTY_NOTICES.md "$STAGE/THIRD_PARTY_NOTICES.md"
           tar -czf "out/zheadless-bundle-$TAG.tar.gz" -C "$STAGE" bin dist THIRD_PARTY_NOTICES.md
 
+          # playwright-core driver (B2/C): pure JS, one platform-independent
+          # asset; extracted by the installer into <install root>/node_modules
+          PWC_DIR=$(dirname "$(readlink -f packages/cli/node_modules/playwright-core)")
+          tar -czf "out/playwright-core-$TAG.tar.gz" -C "$PWC_DIR/.." playwright-core
+
           # standalone binaries (C): bun --compile, cross-compiled per target
           cd packages/cli
           for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
