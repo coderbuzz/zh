@@ -24,9 +24,11 @@ jobs:
           sh build-all.sh
 
       - name: Build release bundle (minified, no sourcemap)
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           cd packages/cli
-          node scripts/build.mjs --release
+          ZCODE_BUILD_VERSION="$TAG" bun scripts/build.mjs --release
           test -f dist/zcode.cjs
           test -f dist/provider/zcode-builtin.json
 
@@ -36,13 +38,15 @@ jobs:
         run: |
           mkdir -p out
           # bundle (B2): launcher + minified cjs + staged provider config
+          # + official plugin trees (node_repl browser bridge, browser-use skill)
           STAGE=$(mktemp -d)
           mkdir -p "$STAGE/bin" "$STAGE/dist/provider"
           cp bin/zh "$STAGE/bin/zh"
           cp packages/cli/dist/zcode.cjs "$STAGE/dist/zcode.cjs"
           cp packages/cli/dist/provider/zcode-builtin.json "$STAGE/dist/provider/zcode-builtin.json"
           cp packages/cli/dist/THIRD_PARTY_NOTICES.md "$STAGE/THIRD_PARTY_NOTICES.md"
-          tar -czf "out/zheadless-bundle-$TAG.tar.gz" -C "$STAGE" bin dist THIRD_PARTY_NOTICES.md
+          cp -R official-plugins "$STAGE/official-plugins"
+          tar -czf "out/zheadless-bundle-$TAG.tar.gz" -C "$STAGE" bin dist official-plugins THIRD_PARTY_NOTICES.md
 
           # playwright-core driver (B2/C): pure JS, one platform-independent
           # asset; extracted by the installer into <install root>/node_modules
@@ -62,7 +66,8 @@ jobs:
             cp "zh-$TARGET" "$BIN_STAGE/bin/zh"
             chmod +x "$BIN_STAGE/bin/zh"
             cp ../../config/provider/zcode-builtin.json "$BIN_STAGE/config/provider/zcode-builtin.json"
-            tar -czf "../../out/zh-$TAG-$TARGET.tar.gz" -C "$BIN_STAGE" bin config
+            cp -R ../../official-plugins "$BIN_STAGE/official-plugins"
+            tar -czf "../../out/zh-$TAG-$TARGET.tar.gz" -C "$BIN_STAGE" bin config official-plugins
             rm -rf "$BIN_STAGE"
           done
           cd ../..

@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -632,9 +633,32 @@ function candidateBaseDirs(): string[] {
   // Electron app-server 运行在 resources/glm/zcode.cjs，官方插件资源也随桌面包
   // stage 到同级 packages/*-plugin。候选目录必须优先看入口文件目录，避免生产态退回到
   // monorepo-only 的 __dirname 查找假设。
-  return [entrypointDir(), runtimeDir(), process.cwd()].filter(
-    (dir): dir is string => typeof dir === "string",
-  );
+  return [
+    entrypointDir(),
+    runtimeDir(),
+    process.cwd(),
+    // 安装产物（binary/bundle）把官方插件树放在 <install root>/official-plugins/；
+    // 从真实可执行位置向上走才能命中，virtual $bunfs 入口则退回 execPath 锚点。
+    ...executableWalkUpDirs(),
+  ].filter((dir): dir is string => typeof dir === "string");
+}
+
+function executableWalkUpDirs(): string[] {
+  let anchor: string;
+  try {
+    anchor = realpathSync(resolve(process.argv[1] ?? process.execPath));
+  } catch {
+    anchor = process.execPath;
+  }
+  const dirs: string[] = [];
+  let directory = dirname(anchor);
+  for (let depth = 0; depth < 8; depth += 1) {
+    dirs.push(directory);
+    const parent = dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  return dirs;
 }
 
 function runtimeDir(): string | undefined {
