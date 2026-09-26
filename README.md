@@ -108,6 +108,11 @@ This compiles every workspace package with `tsc` in dependency order
 automatically when the generated file is missing. `packages/formal-proof`
 is a Vite demo app outside the main build.
 
+`bun run build` inside `packages/cli` additionally produces a
+self-contained node bundle at `packages/cli/dist/zcode.cjs` (about 28 MB),
+which the launcher uses as its node fallback; the repository does not build
+it by default.
+
 ## Layout
 
 - `packages/cli` — entry point and command routing (prompt, TUI, protocol servers)
@@ -120,6 +125,8 @@ is a Vite demo app outside the main build.
 - `packages/i18n`, `packages/telemetry`, `packages/model-option-map` — support modules
 - `packages/zcode-cua` — computer-use broker contracts
 - `bin/zh` — launcher script; `install.sh` — installer
+- `config/provider/zcode-builtin.json` — bundled provider/model catalog the CLI
+  seeds from on first run
 - `patches/` — pinned `@ai-sdk` patches applied on install
 
 ## Status

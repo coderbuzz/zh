@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "node ../../scripts/clean-dist.mjs",
-    "pretypecheck": "pnpm --filter @zcode/dynamic-workflow build",
+    "pretypecheck": "cd ../dynamic-workflow && node scripts/generate-libs.mjs && ../../node_modules/.bin/tsc",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
     "lint:fix": "oxlint --write src"
