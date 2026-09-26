@@ -33,9 +33,10 @@ const packageEntryPath = "node_modules/@zcode/tui/dist/index.js";
 const manifestFileName = "manifest.json";
 
 export const loadTuiRuntime = async (): Promise<TuiRuntimeModule> => {
-  const sea = await import("node:sea");
+  // node:sea 只存在于 Node 单文件可执行构建；Bun 没有该内置模块，按非 SEA 处理。
+  const sea = process.getBuiltinModule?.("node:sea") as SeaModule | undefined;
 
-  if (!sea.isSea()) {
+  if (!sea || !sea.isSea()) {
     return await import("@zcode/tui");
   }
 
