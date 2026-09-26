@@ -1,0 +1,38 @@
+#!/bin/sh
+# zh — headless zcode launcher. Bun is the priority runtime; node runs the
+# prebuilt bundle only when bun is unavailable.
+set -u
+
+# Follow symlinks so the launcher works when invoked through ~/.local/bin/zh.
+target=$0
+while [ -L "$target" ]; do
+  link=$(readlink "$target")
+  case $link in
+    /*) target=$link ;;
+    *) target=$(dirname "$target")/$link ;;
+  esac
+done
+ROOT=$(cd "$(dirname "$target")/.." && pwd)
+
+# Fresh bun installs land in ~/.bun/bin before the shell profile is reloaded.
+PATH="$HOME/.bun/bin:$ROOT/node_modules/.bin:$PATH"
+
+ENTRY="$ROOT/packages/cli/src/main.ts"
+
+run_with_bun() {
+  command -v bun >/dev/null 2>&1 || return 1
+  exec bun "$ENTRY" "$@"
+}
+
+run_with_node() {
+  command -v node >/dev/null 2>&1 || return 1
+  [ -f "$ROOT/packages/cli/dist/zcode.cjs" ] || return 1
+  exec node "$ROOT/packages/cli/dist/zcode.cjs" "$@"
+}
+
+if run_with_bun "$@"; then :; fi
+if run_with_node "$@"; then :; fi
+
+echo "zh: no usable runtime found." >&2
+echo "  Install bun (https://bun.sh), or rebuild the node bundle with: bun run build" >&2
+exit 127
