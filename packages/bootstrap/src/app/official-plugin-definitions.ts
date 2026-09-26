@@ -98,6 +98,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     name: OFFICIAL_NODE_REPL_HOST_PLUGIN_NAME,
     requiredSeedPaths: OFFICIAL_NODE_REPL_HOST_REQUIRED_SEED_PATHS,
     rootCandidates: [
+      "official-plugins/node-repl-host",
       "packages/node-repl-host",
       "../node-repl-host",
       "../../node-repl-host",
@@ -143,6 +144,7 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     name: OFFICIAL_BROWSER_USE_PLUGIN_NAME,
     requiredSeedPaths: OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS,
     rootCandidates: [
+      "official-plugins/browser-use",
       "packages/browser-use-plugin",
       "../browser-use-plugin",
       "../../browser-use-plugin",

@@ -126,8 +126,10 @@ is a Vite demo app outside the main build.
 
 `bun run build` inside `packages/cli` additionally produces the node bundle
 at `packages/cli/dist/zcode.cjs`: plain `bun run build` keeps a debug source
-map, `bun run build -- --release` minifies and drops the map (about 14 MB),
-which is what release assets contain.
+map, `bun run build -- --release` minifies and drops the map (about 12 MB),
+which is what release assets contain. The bundle is built by Bun's own
+bundler; `ZCODE_BUILD_VERSION=<tag>` overrides the version reported by
+`zh version`, which the release pipeline sets from the git tag.
 
 ## Layout
 
@@ -160,10 +162,9 @@ Known limits: the interactive TUI is not part of this repository (the
 upstream `@zcode/tui` package was not extracted, so `zh tui` fails with an
 error rather than opening a terminal UI); there are no Windows binaries yet;
 the darwin binaries are unsigned. Browser use (`--browser-use=headless`)
-drives a real Chromium end to end on the source and bundle installs; the
-standalone binary installs the `playwright-core` driver but its node-repl
-browser bridge is not registered yet, so prefer `--method=bundle` when the
-orchestrator needs browsing.
+drives a real Chromium on every install method, verified down to executing
+JavaScript in the page; the machine still needs a browser executable, passed
+with `--browser-executable` (or the bundled driver's own discovery).
 
 ## License
 
