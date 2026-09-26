@@ -1,6 +1,13 @@
 #!/bin/sh
-# zh — headless zcode launcher. Bun is the priority runtime; node runs the
-# prebuilt bundle only when bun is unavailable.
+# zh — headless zcode launcher.
+#
+# Runtime priority: bun everywhere. The launcher supports the install layouts
+# produced by install.sh (source checkout) and install-remote.sh (release
+# bundle), falling back to node for the prebuilt bundle when bun is absent:
+#
+#   1. bun  + packages/cli/src/main.ts   (source checkout, freshest code)
+#   2. bun  + dist/zcode.cjs             (release bundle)
+#   3. node + dist/zcode.cjs             (bundle, no bun installed)
 set -u
 
 # Follow symlinks so the launcher works when invoked through ~/.local/bin/zh.
@@ -17,22 +24,23 @@ ROOT=$(cd "$(dirname "$target")/.." && pwd)
 # Fresh bun installs land in ~/.bun/bin before the shell profile is reloaded.
 PATH="$HOME/.bun/bin:$ROOT/node_modules/.bin:$PATH"
 
-ENTRY="$ROOT/packages/cli/src/main.ts"
+SOURCE_ENTRY="$ROOT/packages/cli/src/main.ts"
+BUNDLE_ENTRY="$ROOT/dist/zcode.cjs"
 
-run_with_bun() {
-  command -v bun >/dev/null 2>&1 || return 1
-  exec bun "$ENTRY" "$@"
-}
+if [ -f "$SOURCE_ENTRY" ] && command -v bun >/dev/null 2>&1; then
+  exec bun "$SOURCE_ENTRY" "$@"
+fi
 
-run_with_node() {
-  command -v node >/dev/null 2>&1 || return 1
-  [ -f "$ROOT/packages/cli/dist/zcode.cjs" ] || return 1
-  exec node "$ROOT/packages/cli/dist/zcode.cjs" "$@"
-}
+if [ -f "$BUNDLE_ENTRY" ]; then
+  if command -v bun >/dev/null 2>&1; then
+    exec bun "$BUNDLE_ENTRY" "$@"
+  fi
+  if command -v node >/dev/null 2>&1; then
+    exec node "$BUNDLE_ENTRY" "$@"
+  fi
+fi
 
-if run_with_bun "$@"; then :; fi
-if run_with_node "$@"; then :; fi
-
-echo "zh: no usable runtime found." >&2
-echo "  Install bun (https://bun.sh), or rebuild the node bundle with: bun run build" >&2
+echo "zh: no usable runtime or entry point found under $ROOT." >&2
+echo "  Install bun (https://bun.sh) for source checkouts, or reinstall via:" >&2
+echo "  curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=bundle" >&2
 exit 127

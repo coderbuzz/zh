@@ -145,7 +145,14 @@ async function resolveBundledZCodeBuiltinProviderConfig(input: {
   const entrypoint = input.entrypoint?.trim();
   if (!entrypoint) throw new Error("无法定位 CLI ZCode Built-in Provider Config：缺少入口路径");
   // 全局 bin 可以是软链接，随包配置必须相对真实入口定位。
-  const entryDirectory = dirname(realpathSync(resolve(entrypoint)));
+  // bun --compile 单文件里 argv[1] 是虚拟 $bunfs 路径，realpath 会失败；
+  // 此时以真实可执行文件位置为锚点，config 仍能沿目录向上找到。
+  let entryDirectory: string;
+  try {
+    entryDirectory = dirname(realpathSync(resolve(entrypoint)));
+  } catch {
+    entryDirectory = dirname(process.execPath);
+  }
   // 顺序：打包产物旁的随包副本优先；然后逐级向上找仓库内的 config/provider/。
   // 向上走让 src 与 dist 两种入口布局都能命中同一份随仓库提交的配置。
   const candidates = [join(entryDirectory, "provider", "zcode-builtin.json")];

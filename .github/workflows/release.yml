@@ -1,0 +1,110 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies and build workspace packages
+        run: |
+          bun install --frozen-lockfile
+          sh build-all.sh
+
+      - name: Build release bundle (minified, no sourcemap)
+        run: |
+          cd packages/cli
+          node scripts/build.mjs --release
+          test -f dist/zcode.cjs
+          test -f dist/provider/zcode-builtin.json
+
+      - name: Assemble release assets
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p out
+          # bundle (B2): launcher + minified cjs + staged provider config
+          STAGE=$(mktemp -d)
+          mkdir -p "$STAGE/bin" "$STAGE/dist/provider"
+          cp bin/zh "$STAGE/bin/zh"
+          cp packages/cli/dist/zcode.cjs "$STAGE/dist/zcode.cjs"
+          cp packages/cli/dist/provider/zcode-builtin.json "$STAGE/dist/provider/zcode-builtin.json"
+          cp packages/cli/dist/THIRD_PARTY_NOTICES.md "$STAGE/THIRD_PARTY_NOTICES.md"
+          tar -czf "out/zheadless-bundle-$TAG.tar.gz" -C "$STAGE" bin dist THIRD_PARTY_NOTICES.md
+
+          # standalone binaries (C): bun --compile, cross-compiled per target
+          cd packages/cli
+          for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
+            bun build --compile src/main.ts \
+              --target="bun-$TARGET" \
+              --outfile="zh-$TARGET" \
+              --external playwright-core --external koffi --external @zcode/tui \
+              --define "__CLI_VERSION__:\"$TAG\""
+            BIN_STAGE=$(mktemp -d)
+            mkdir -p "$BIN_STAGE/bin" "$BIN_STAGE/config/provider"
+            cp "zh-$TARGET" "$BIN_STAGE/bin/zh"
+            chmod +x "$BIN_STAGE/bin/zh"
+            cp ../../config/provider/zcode-builtin.json "$BIN_STAGE/config/provider/zcode-builtin.json"
+            tar -czf "../../out/zh-$TAG-$TARGET.tar.gz" -C "$BIN_STAGE" bin config
+            rm -rf "$BIN_STAGE"
+          done
+          cd ../..
+
+          # checksums for every asset
+          cd out
+          sha256sum *.tar.gz > SHA256SUMS
+          cd ..
+
+          ls -lh out/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: out/
+
+  publish:
+    needs: packages
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: out
+
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > notes.md <<EOF
+          zheadless $TAG
+
+          Install (picks binary by default, falls back to bundle):
+
+              curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh
+
+          Choose a method explicitly:
+
+              curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=binary   # standalone, no runtime needed
+              curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=bundle   # bun with node fallback
+              curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=source   # build from source, needs bun
+          EOF
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "zheadless $TAG" \
+            --notes-file notes.md \
+            out/*
