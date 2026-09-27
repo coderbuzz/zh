@@ -23,11 +23,17 @@ curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-re
 ```
 
 The installer downloads the latest release, verifies its SHA256 checksums,
-symlinks `zh` into `~/.local/bin`, and smoke tests it. Pick a method
-explicitly if you prefer:
+symlinks `zh` into `~/.local/bin`, and smoke tests it. The default method is
+`auto`: bundle when the machine already has a usable runtime (bun, or
+node >= 22 — the runtime contract of the prebuilt bundle), standalone binary
+otherwise. Developer machines almost always qualify for the bundle. Pick a
+method explicitly if you prefer:
 
 ```sh
-# standalone executable per OS/arch, no bun or node needed (default)
+# auto: bundle when bun or node >= 22 is present, binary otherwise (default)
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=auto
+
+# standalone executable per OS/arch, no bun or node needed
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=binary
 
 # minified bundle + launcher; runs with bun, falls back to node
@@ -171,6 +177,12 @@ does the launcher fall back to `node` with the bundle. The `--method=binary`
 install skips the launcher entirely: `zh` is a standalone executable with
 the bun runtime embedded.
 
+When the installer picks the bundle and the validated runtime lives outside
+the default `PATH` (version managers, `~/.bun` before the profile reload), it
+records the absolute path in `~/.local/share/zheadless/.zh-runtime`; the
+launcher sources that file and prefers the pinned binaries over `PATH`
+lookup, so `zh` also works in non-interactive shells.
+
 ## Build
 
 ```sh
@@ -202,7 +214,7 @@ bundler; `ZCODE_BUILD_VERSION=<tag>` overrides the version reported by
 - `packages/i18n`, `packages/telemetry`, `packages/model-option-map` — support modules
 - `packages/zcode-cua` — computer-use broker contracts
 - `bin/zh` — launcher script; `install.sh` — source installer;
-  `install-remote.sh` — one-line remote installer (binary, bundle, or source)
+  `install-remote.sh` — one-line remote installer (auto, binary, bundle, or source)
 - `packages/tui` — the interactive terminal interface (`zh tui`), bundled to
   `dist/index.js` and kept external from the CLI bundle;
   `scripts/stage-tui-runtime.mjs` — builds the TUI runtime release asset
