@@ -36,7 +36,12 @@ export type { RunDependencies } from "./cli-types.js";
 
 declare const __CLI_VERSION__: string | undefined;
 
-const version = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "0.0.0";
+// Bundle and binary builds bake the version in via --define; source runs fall
+// back to the env var the launcher exports from the root package.json.
+const version =
+  typeof __CLI_VERSION__ === "string"
+    ? __CLI_VERSION__
+    : process.env["ZCODE_BUILD_VERSION"] || "0.0.0";
 
 const EMPTY_TARGET_ERROR = "--target requires non-empty text.";
 const DEFAULT_HEADLESS_PROMPT_MODE: CliPermissionMode = "yolo";
