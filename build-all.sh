@@ -44,5 +44,18 @@ do
   fi
 done
 
+# tui emits declarations with tsc, then bundles dist/index.js with Bun.build.
+# The bundle step needs the bun runtime, so it cannot run under tsc like the rest.
+printf "%-26s" "tui:" >> "$STATUS"
+if (cd packages/tui && "$TSC" > /tmp/tsc-tui.log 2>&1 && bun scripts/build.mjs >> /tmp/tsc-tui.log 2>&1); then
+  echo "OK" >> "$STATUS"
+  echo "tui: OK" >&2
+else
+  echo "FAIL (see /tmp/tsc-tui.log)" >> "$STATUS"
+  echo "tui: FAIL" >&2
+  tail -5 /tmp/tsc-tui.log >&2
+  exit 1
+fi
+
 echo "ALL_DONE" >> "$STATUS"
 echo "all packages built" >&2

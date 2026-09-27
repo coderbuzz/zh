@@ -53,7 +53,17 @@ jobs:
           PWC_DIR=$(cd packages/cli && node -e "console.log(require('path').dirname(require.resolve('playwright-core/package.json')))")
           tar -czf "out/playwright-core-$TAG.tar.gz" -C "$PWC_DIR/.." playwright-core
 
-          # standalone binaries (C): bun --compile, cross-compiled per target
+          # tui runtime closure: @zcode/tui stays external from the bundle and
+          # binaries (OpenTUI's native loader uses top-level await), so it ships
+          # as its own asset and the installer extracts it into
+          # <install root>/node_modules
+          bun scripts/stage-tui-runtime.mjs --out out --tag "$TAG"
+
+          # standalone binaries (C): bun --compile, cross-compiled per target.
+          # dist/zcode.cjs rides along because the interactive TUI needs to
+          # re-exec the bundle through the binary's own bun runtime
+          # (BUN_BE_BUN=1); the sealed binary cannot resolve the TUI closure
+          # from disk on its own.
           cd packages/cli
           for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64; do
             bun build --compile src/main.ts \
@@ -62,12 +72,13 @@ jobs:
               --external playwright-core --external koffi --external @zcode/tui \
               --define "__CLI_VERSION__:\"$TAG\""
             BIN_STAGE=$(mktemp -d)
-            mkdir -p "$BIN_STAGE/bin" "$BIN_STAGE/config/provider"
+            mkdir -p "$BIN_STAGE/bin" "$BIN_STAGE/dist" "$BIN_STAGE/config/provider"
             cp "zh-$TARGET" "$BIN_STAGE/bin/zh"
             chmod +x "$BIN_STAGE/bin/zh"
+            cp dist/zcode.cjs "$BIN_STAGE/dist/zcode.cjs"
             cp ../../config/provider/zcode-builtin.json "$BIN_STAGE/config/provider/zcode-builtin.json"
             cp -R ../../official-plugins "$BIN_STAGE/official-plugins"
-            tar -czf "../../out/zh-$TAG-$TARGET.tar.gz" -C "$BIN_STAGE" bin config official-plugins
+            tar -czf "../../out/zh-$TAG-$TARGET.tar.gz" -C "$BIN_STAGE" bin dist config official-plugins
             rm -rf "$BIN_STAGE"
           done
           cd ../..

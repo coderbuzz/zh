@@ -198,8 +198,8 @@ case $METHOD in
     ;;
 esac
 
-# binary/bundle installs get the playwright-core driver as a separate asset;
-# source installs already have it from bun install.
+# binary/bundle installs get the playwright-core driver and the TUI runtime as
+# separate assets; source installs already have both from bun install.
 if [ "$METHOD" = "binary" ] || [ "$METHOD" = "bundle" ]; then
   if [ "$NO_BROWSER_DRIVER" = "0" ] && [ -n "$TAG" ]; then
     say "installing browser driver (playwright-core)"
@@ -208,6 +208,13 @@ if [ "$METHOD" = "binary" ] || [ "$METHOD" = "bundle" ]; then
     mkdir -p "$INSTALL_HOME/node_modules"
     tar -xzf "$DRIVER_TMP/pwc.tar.gz" -C "$INSTALL_HOME/node_modules"
     rm -rf "$DRIVER_TMP"
+  fi
+  if [ -n "$TAG" ]; then
+    say "installing TUI runtime"
+    TUI_TMP=$(mktemp -d)
+    download_asset "zheadless-tui-runtime-$TAG.tar.gz" "$TUI_TMP/tui.tar.gz"
+    tar -xzf "$TUI_TMP/tui.tar.gz" -C "$INSTALL_HOME"
+    rm -rf "$TUI_TMP"
   fi
 fi
 

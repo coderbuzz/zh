@@ -3,7 +3,8 @@
 Headless agent runner built from [zcode](https://github.com/coderbuzz/zcode).
 It packages the zcode CLI for machines with no display: an orchestrator sends a
 prompt over SSH or stdio, the agent plans, calls tools, and returns the result.
-No browser, no TUI, no display server required.
+Headless runs never require a display server. For interactive sessions, `zh
+tui` opens the full zcode terminal interface.
 
 The agent loop is the zcode agent. It reads and writes files, runs shell
 commands, loads local skills, and can drive dynamic workflows. Prompt runs
@@ -46,8 +47,9 @@ From a clone of this repository, `sh install.sh` does the same as
 `zh version`.
 
 Releases are built by GitHub Actions on every `v*` tag: a platform
-independent bundle plus standalone binaries for linux-x64, linux-arm64,
-darwin-x64, and darwin-arm64. The darwin binaries are unsigned; macOS may
+independent bundle, standalone binaries for linux-x64, linux-arm64,
+darwin-x64, and darwin-arm64, the playwright-core driver, and the TUI runtime
+asset. The darwin binaries are unsigned; macOS may
 ask you to clear the quarantine flag before first run.
 
 ## Authentication
@@ -85,6 +87,21 @@ Other flags worth knowing:
 - `--resume <sessionId>` / `-c` continue a previous session
 - `--disallowed-tools "Bash Edit"` removes tools for one run
 - `--cwd <path>` runs in another directory
+
+### Interactive TUI
+
+`zh tui` opens the upstream zcode terminal interface: the zcode logo screen,
+prompt composer, model and effort switching, slash commands, and the session
+workflow views. It needs a real terminal; without a TTY it prints
+`TUI requires an interactive terminal.` and exits.
+
+The TUI runtime (`@zcode/tui` and its dependency closure) ships as its own
+release asset, `zheadless-tui-runtime-<tag>.tar.gz`, which the installer
+extracts into `<install root>/node_modules` next to the playwright-core
+driver. On the binary install, `zh tui` re-executes the bundled
+`dist/zcode.cjs` through the binary's own bun runtime (`BUN_BE_BUN=1`): a
+compiled binary cannot resolve the TUI's on-disk dependencies by itself, and
+the bundle on disk resolves them normally.
 
 ### Protocol mode
 
@@ -183,6 +200,9 @@ bundler; `ZCODE_BUILD_VERSION=<tag>` overrides the version reported by
 - `packages/zcode-cua` — computer-use broker contracts
 - `bin/zh` — launcher script; `install.sh` — source installer;
   `install-remote.sh` — one-line remote installer (binary, bundle, or source)
+- `packages/tui` — the interactive terminal interface (`zh tui`), bundled to
+  `dist/index.js` and kept external from the CLI bundle;
+  `scripts/stage-tui-runtime.mjs` — builds the TUI runtime release asset
 - `.github/workflows/release.yml` — release pipeline: bundle, standalone
   binaries, and checksums published on every `v*` tag
 - `config/provider/zcode-builtin.json` — bundled provider/model catalog the CLI
@@ -204,14 +224,19 @@ on this codebase, most recently against release v0.1.3:
   executed `navigator.userAgent` in the page through `--browser-use=headless`
   and returned the exact value, so tool calls, page evaluation, and the
   shipped plugin trees all work from a cold start.
+- The interactive TUI rendered the full zcode interface under tmux on macOS
+  (source checkout) and inside a Debian 12 container through the compiled
+  linux-x64 binary (re-exec through the bundle). `zh -p` and `zh app-server`
+  were regression tested after the change.
 - Builds are reproducible from a wiped workspace, the release pipeline
   publishes on a tag push alone, and the CLI version comes from the tag, not
   from a hand-edited field.
 
-Known limits, stated plainly: no interactive TUI (the upstream `@zcode/tui`
-package was not extracted; `zh tui` fails with a clear error); no Windows
-binaries yet; darwin binaries are unsigned; the protocol server's frame-level
-handshake is documented as a schema reference rather than a worked example.
+Known limits, stated plainly: the TUI was exercised on darwin (source) and
+linux-x64 (binary); the other binary targets ship the same loader code but
+were not individually exercised; no Windows binaries yet; darwin binaries are
+unsigned; the protocol server's frame-level handshake is documented as a
+schema reference rather than a worked example.
 
 If you find a gap, the fastest path is `zh -p` against this repository.
 
