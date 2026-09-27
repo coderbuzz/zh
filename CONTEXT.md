@@ -55,6 +55,15 @@ Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   execs `bun packages/cli/src/main.ts` (source checkout) or
   `dist/zcode.cjs` (bundle). node only runs the prebuilt bundle when bun is
   absent.
+- **Installer default is `auto`.** `install-remote.sh` picks the bundle when a
+  usable runtime already exists (bun >= 1 or node >= 22 — the runtime contract
+  of `dist/zcode.cjs`), the standalone binary otherwise. Bundle installs pin
+  the validated runtime paths in `<install root>/.zh-runtime` (only when their
+  directories are not in `PATH`); `bin/zh` sources that file and prefers the
+  pinned binaries over `PATH` lookup, so non-interactive shells (cron, agents)
+  work too. Bundle layouts ship no root `package.json` — the launcher guards
+  its `sed` version probe with `[ -f ]`, and `zh version` stays correct via
+  the compile-time `__CLI_VERSION__`.
 - **The repo must stay self-contained.** No references to the upstream
   monorepo: `config/provider/zcode-builtin.json` (bundled model catalog) and
   `official-plugins/` (node-repl-host 0.6.0, browser-use 0.5.1, harvested

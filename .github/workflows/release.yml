@@ -114,12 +114,13 @@ jobs:
           cat > notes.md <<EOF
           zheadless $TAG
 
-          Install (picks binary by default, falls back to bundle):
+          Install (auto: bundle when bun or node >= 22 is present, binary otherwise):
 
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh
 
           Choose a method explicitly:
 
+              curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=auto    # runtime-aware default
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=binary   # standalone, no runtime needed
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=bundle   # bun with node fallback
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=source   # build from source, needs bun

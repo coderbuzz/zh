@@ -4,13 +4,21 @@
 # One-liner:
 #   curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 #
-# Methods (user's choice):
-#   binary  standalone per-OS/arch executable; no bun/node needed  (default)
+# Methods:
+#   auto    pick the smallest install that runs on this machine: bundle when a
+#           usable runtime is already present (bun, or node >= 22; the runtime
+#           contract of dist/zcode.cjs), binary otherwise            (default)
+#   binary  standalone per-OS/arch executable; no bun/node needed
 #   bundle  dist/zcode.cjs + launcher; runs with bun, falls back to node
 #   source  full source checkout built locally; needs bun
 #
+# In bundle mode the launcher resolves bun/node itself; when the validated
+# runtime lives outside the default PATH (version managers, ~/.bun before the
+# profile reload), the installer records its absolute path in
+# <install root>/.zh-runtime so `zh` finds it in non-interactive shells too.
+#
 # Usage:
-#   install-remote.sh [--method=binary|bundle|source] [--version=TAG]
+#   install-remote.sh [--method=auto|binary|bundle|source] [--version=TAG]
 #                     [--home=DIR] [--prefix=DIR] [--asset-dir=DIR]
 #                     [--no-verify] [--no-browser-driver] [--uninstall]
 #
@@ -110,19 +118,79 @@ case $ARCH in
   *) echo "unsupported arch: $ARCH" >&2; exit 1 ;;
 esac
 
+# --- runtime detection (auto selection and bundle pinning) --------------------
+# Mirrors the bundle runtime contract from packages/cli/scripts/build.mjs:
+# dist/zcode.cjs runs on node >= 22 or a current bun; the two executables are
+# interchangeable for the prebuilt bundle.
+NODE_MIN_MAJOR=22
+BUN_MIN_MAJOR=1
+
+path_has_dir() {
+  case ":$PATH:" in *":$1:"*) return 0 ;; *) return 1 ;; esac
+}
+
+major_of() { # major_of <version output>; accepts "v24.21.0" and "1.4.2"
+  printf '%s' "$1" | sed -n 's/^[vV]\{0,1\}\([0-9][0-9]*\).*/\1/p'
+}
+
+runtime_ok() { # runtime_ok <absolute bin> <min major>
+  [ -n "$1" ] && [ -x "$1" ] || return 1
+  RUNTIME_VERSION=$("$1" --version 2>/dev/null) || return 1
+  [ "$(major_of "$RUNTIME_VERSION")" -ge "$2" ] 2>/dev/null || return 1
+}
+
+detect_bun() { # prints the first usable bun path, or nothing
+  if command -v bun >/dev/null 2>&1; then command -v bun; return 0; fi
+  for candidate in "$HOME/.bun/bin/bun" /usr/local/bin/bun /opt/homebrew/bin/bun; do
+    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+detect_node() { # prints the newest usable node path, or nothing
+  if command -v node >/dev/null 2>&1; then command -v node; return 0; fi
+  for candidate in /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do
+    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  for candidate in "$HOME"/.nvm/versions/node/*/bin/node; do
+    [ -x "$candidate" ] && printf '%s\n' "$candidate"
+  done | sort -V | tail -1
+}
+
+BUN_BIN_DETECTED=""
+NODE_BIN_DETECTED=""
+if BUN_CANDIDATE=$(detect_bun) && runtime_ok "$BUN_CANDIDATE" "$BUN_MIN_MAJOR"; then
+  BUN_BIN_DETECTED=$BUN_CANDIDATE
+fi
+if NODE_CANDIDATE=$(detect_node) && runtime_ok "$NODE_CANDIDATE" "$NODE_MIN_MAJOR"; then
+  NODE_BIN_DETECTED=$NODE_CANDIDATE
+fi
+
 # --- method ------------------------------------------------------------------
-if [ -z "$METHOD" ]; then
-  METHOD="bundle"
-  if [ -z "$ASSET_DIR" ]; then
-    if fetch_stdout "https://api.github.com/repos/$REPO/releases/tags/$TAG" |
-      grep -q "\"name\": \"zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz\""; then
+if [ -z "$METHOD" ] || [ "$METHOD" = "auto" ]; then
+  if [ -n "$BUN_BIN_DETECTED" ] || [ -n "$NODE_BIN_DETECTED" ]; then
+    METHOD="bundle"
+  elif [ -n "$ASSET_DIR" ]; then
+    if [ -f "$ASSET_DIR/zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz" ]; then
       METHOD="binary"
+    else
+      echo "auto: no runtime and no binary asset in $ASSET_DIR; install bun or node, or pass --method=bundle" >&2
+      exit 1
     fi
-  elif [ -f "$ASSET_DIR/zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz" ]; then
+  elif [ -n "$TAG" ] && fetch_stdout "https://api.github.com/repos/$REPO/releases/tags/$TAG" |
+    grep -q "\"name\": \"zh-$TAG-$OS_TAG-$ARCH_TAG.tar.gz\""; then
     METHOD="binary"
+  else
+    echo "auto: no usable bun/node found and no binary asset for $OS_TAG-$ARCH_TAG." >&2
+    echo "  Install bun (https://bun.sh) or node >= $NODE_MIN_MAJOR, or pass --method=bundle explicitly." >&2
+    exit 1
   fi
 fi
 echo "method: $METHOD"
+
+if [ "$METHOD" = "bundle" ] && [ -z "$BUN_BIN_DETECTED" ] && [ -z "$NODE_BIN_DETECTED" ]; then
+  echo "warning: no usable bun/node detected; the bundle needs one (node >= $NODE_MIN_MAJOR) to run." >&2
+fi
 
 BASE_URL="https://github.com/$REPO/releases/download/$TAG"
 if [ -n "$ASSET_DIR" ] && [ "$METHOD" != "source" ]; then
@@ -216,6 +284,23 @@ if [ "$METHOD" = "binary" ] || [ "$METHOD" = "bundle" ]; then
     tar -xzf "$TUI_TMP/tui.tar.gz" -C "$INSTALL_HOME"
     rm -rf "$TUI_TMP"
   fi
+fi
+
+# Bundle installs pin the validated runtimes when their directories are not in
+# PATH, so the launcher also works in non-interactive shells (cron, agents,
+# fresh terminals before the profile reloads). Pinned binaries win over PATH.
+if [ "$METHOD" = "bundle" ]; then
+  PIN_FILE="$INSTALL_HOME/.zh-runtime"
+  : > "$PIN_FILE"
+  pin_runtime() { # pin_runtime <BUN|NODE> <absolute bin>
+    [ -n "$2" ] || return 0
+    path_has_dir "$(dirname "$2")" && return 0
+    printf 'ZH_RUNTIME_%s="%s"\n' "$1" "$2" >> "$PIN_FILE"
+    echo "pinned $1 runtime: $2 (directory is not in PATH)"
+  }
+  pin_runtime BUN "$BUN_BIN_DETECTED"
+  pin_runtime NODE "$NODE_BIN_DETECTED"
+  [ -s "$PIN_FILE" ] || rm -f "$PIN_FILE"
 fi
 
 echo "zheadless-install: method=$METHOD version=${TAG:-local} date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
