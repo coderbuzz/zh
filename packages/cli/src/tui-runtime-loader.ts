@@ -37,11 +37,58 @@ export const loadTuiRuntime = async (): Promise<TuiRuntimeModule> => {
   const sea = process.getBuiltinModule?.("node:sea") as SeaModule | undefined;
 
   if (!sea || !sea.isSea()) {
+    // bun --compile 二进制是密封的：动态 import 磁盘上的 TUI 入口时，入口的
+    // bare 依赖只查内嵌模块图，不查磁盘 node_modules，Bun.plugin 也接不到。
+    // 唯一出路是让二进制以 Bun CLI 的身份（BUN_BE_BUN=1）重新执行随包发布的
+    // dist/zcode.cjs：那是磁盘上的普通文件，子进程里所有解析走正常规则。
+    if (isBunStandaloneExecutable()) {
+      await reexecThroughBunCli();
+    }
     return await import("@zcode/tui");
   }
 
   const runtimeDirectory = await ensureSeaTuiRuntime(sea);
   return await import(pathToFileURL(join(runtimeDirectory, packageEntryPath)).href);
+};
+
+const isBunStandaloneExecutable = (): boolean =>
+  (process.argv[1] ?? "").includes("$bunfs");
+
+const reexecThroughBunCli = async (): Promise<void> => {
+  if (process.env["ZH_TUI_REEXEC"] === "1") return; // recursion guard
+
+  // 从真实可执行位置向上找随包发布的 bundle：<install root>/dist/zcode.cjs。
+  let anchor = dirname(process.execPath);
+  let bundleEntry: string | undefined;
+  for (let depth = 0; depth < 8; depth += 1) {
+    const candidate = join(anchor, "dist", "zcode.cjs");
+    if (existsSync(candidate)) {
+      bundleEntry = candidate;
+      break;
+    }
+    const parent = dirname(anchor);
+    if (parent === anchor) break;
+    anchor = parent;
+  }
+  if (!bundleEntry) {
+    throw new Error(
+      "Interactive TUI needs dist/zcode.cjs next to this executable (reinstall to get it).",
+    );
+  }
+
+  type BunCliSpawn = (options: {
+    cmd: string[];
+    env: Record<string, string | undefined>;
+    stdio: ["inherit", "inherit", "inherit"];
+  }) => { exited: Promise<number> };
+  const bun = (globalThis as { Bun?: { spawn?: BunCliSpawn } }).Bun;
+  if (!bun?.spawn) throw new Error("Bun.spawn unavailable for TUI re-exec");
+  const child = bun.spawn({
+    cmd: [process.execPath, "run", bundleEntry, ...process.argv.slice(2)],
+    env: { ...process.env, BUN_BE_BUN: "1", ZH_TUI_REEXEC: "1" },
+    stdio: ["inherit", "inherit", "inherit"],
+  });
+  process.exit(await child.exited);
 };
 
 const ensureSeaTuiRuntime = async (sea: SeaModule): Promise<string> => {

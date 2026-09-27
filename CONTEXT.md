@@ -74,8 +74,22 @@ Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 - **`node:sea` does not exist in Bun.** Never import it statically; guard
   with `process.getBuiltinModule?.("node:sea")`. Three sites are already
   guarded (core/environment, tui-runtime-loader, sea-playwright-runtime).
-- **TUI is out of scope so far.** `@zcode/tui` was never extracted; `zh tui`
-  fails with a clear "Cannot find package" error by design.
+- **The TUI is included.** `packages/tui` is the upstream `@zcode/tui`
+  package (OpenTUI native renderer + React 19, not Ink/yoga as an earlier
+  handoff guessed). `tsc` emits declarations, then `bun scripts/build.mjs`
+  bundles `dist/index.js` (~1.2 MB ESM) with every non-`@zcode` dependency
+  external. The CLI bundle stays free of it (top-level await in OpenTUI's
+  native loader can never enter a CJS bundle) and ships as a release asset
+  built by `scripts/stage-tui-runtime.mjs` (68 packages, ~14.7 MB tar.gz,
+  natives for all four targets via npm pack, no `.map` files, koffi trimmed
+  to the four build triplets).
+- **bun --compile binaries are hermetic.** A dynamic `import()` of a file on
+  disk resolves that file's bare imports against the embedded module graph
+  only, never against disk `node_modules`, and `Bun.plugin` does not hook it
+  (`createRequire` and `NODE_PATH` do not help either). The TUI path in
+  `tui-runtime-loader.ts` escapes by re-executing the binary as the bun CLI
+  (`BUN_BE_BUN=1`) running the on-disk `dist/zcode.cjs`, which is why binary
+  release tarballs now also carry `dist/zcode.cjs`.
 
 ## Gotchas (learned the hard way)
 
@@ -99,6 +113,19 @@ Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 - The desktop app sets `ZCODE_BUILTIN_PROVIDER_CONFIG_FILE` /
   `ZCODE_PERSONAL_PROVIDER_CONFIG_FILE`, which bypasses the bundled config
   lookup. Unset them when testing that path.
+- **TUI verification needs a terminal that answers.** OpenTUI probes the
+  terminal for capabilities (cursor position, XTVERSION) at startup; `script`
+  and a bare `tmux` inside a container without a real outer terminal never
+  answer, and the renderer stalls with a 1x1 root. A `tmux` on a real host
+  works (it answers the queries itself). For CI-friendly render checks use
+  OpenTUI's own test renderer:
+  `createTestRenderer()` from `@mbears/opentui-core/testing` plus `createRoot`
+  from `@mbears/opentui-react` renders to a captured frame with no terminal
+  at all.
+- `sh build-all.sh` now runs 13 tsc packages plus `packages/tui`, whose build
+  needs the bun runtime (`tsc && bun scripts/build.mjs`), and `packages/cli`
+  typecheck needs the tui declarations, so the tui entry must stay after
+  `bootstrap` in the build order.
 
 ## Conventions
 
@@ -113,17 +140,16 @@ Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 
 ## Open threads
 
-1. **TUI inclusion research** (next session): complexity and size cost of
-   bringing `@zcode/tui` from the upstream monorepo (workspace packages,
-   Ink 7 + yoga-layout, top-level-await CJS implications for the bun-built
-   bundle).
-2. **zh as a browser-accessible UI server** (next session): explore serving
+1. **zh as a browser-accessible UI server** (next session): explore serving
    an orchestrator UI from `zh` like the zcode remote feature
-   (zcode.z.ai/remote/v4). Relevant hooks already in the code:
-   `presentationSurface` (`desktop_local_host` vs `remote_workspace_host`,
-   see `zcode-protocol-entrypoint.ts`), the v4 protocol's
-   controller/conversation subscribe model, and the fact that the desktop
-   app is itself just an app-server client.
-3. Protocol handshake worked example for the README (frames are schema-rich;
+   (zcode.z.ai/remote/v4). The 2026-09-27 research found: upstream's web UI
+   speaks a binary RPC channel protocol served by `packages/server` plus an
+   in-process agent embedding in `@zcode/services` (87k LOC), so adopting it
+   means a second product extraction. The feasible path is a small `zh web`
+   command bridging WebSocket to the v4 app-server; the v4 surface already
+   has everything a chat UI needs. Discussion pending with the owner.
+2. Protocol handshake worked example for the README (frames are schema-rich;
    needs a real client session to capture).
-4. Windows binaries; darwin signing.
+3. Windows binaries; darwin signing.
+4. TUI runtime asset could drop `.d.ts` and unused shiki engines to shrink
+   the 14.7 MB asset.
