@@ -211,32 +211,24 @@ bundler; `ZCODE_BUILD_VERSION=<tag>` overrides the version reported by
 
 ## Status
 
-Production ready for unattended headless work. Everything below was verified
-on this codebase, most recently against release v0.1.3:
+Production ready for unattended headless work.
 
-- One-line install on a bare Debian 12 container (no git, no bun, no node
-  preinstalled): the installer picked the standalone binary, verified both
-  checksums, and `zh version` reported the release tag.
-- A full agent loop ran in that container with only two credential files
-  placed in `~/.zcode`; `zh -p` returned the expected answer and
-  `--output-format json` carried session and usage data for orchestrators.
-- Browser use ran a real headless Chromium in the same container: the agent
-  executed `navigator.userAgent` in the page through `--browser-use=headless`
-  and returned the exact value, so tool calls, page evaluation, and the
-  shipped plugin trees all work from a cold start.
-- The interactive TUI rendered the full zcode interface under tmux on macOS
-  (source checkout) and inside a Debian 12 container through the compiled
-  linux-x64 binary (re-exec through the bundle). `zh -p` and `zh app-server`
-  were regression tested after the change.
-- Builds are reproducible from a wiped workspace, the release pipeline
-  publishes on a tag push alone, and the CLI version comes from the tag, not
-  from a hand-edited field.
+- One-line install on Linux (x64, arm64) and macOS (Apple silicon, Intel),
+  with no bun, node, or git required. Every install method is self-contained:
+  the browser driver and the interactive TUI runtime come with the install.
+- `zh -p` returns plain text or machine-readable JSON with session and usage
+  data for orchestrators.
+- `zh app-server` / `zh agent-server` hold one NDJSON connection across many
+  prompts, for orchestrators that keep sessions warm.
+- `zh tui` opens the full zcode terminal interface. It needs a real terminal
+  (a local terminal or an SSH session with a TTY) and exits with a clear
+  message otherwise. Running `zh` with no arguments opens it.
+- Browser use drives a real headless Chromium through `--browser-use=headless`.
 
-Known limits, stated plainly: the TUI was exercised on darwin (source) and
-linux-x64 (binary); the other binary targets ship the same loader code but
-were not individually exercised; no Windows binaries yet; darwin binaries are
-unsigned; the protocol server's frame-level handshake is documented as a
-schema reference rather than a worked example.
+Known limits, stated plainly: no Windows binaries yet; darwin binaries are
+unsigned, so macOS may ask you to clear the quarantine flag on first run; the
+protocol server's frame-level handshake is documented as a schema reference
+rather than a worked example.
 
 If you find a gap, the fastest path is `zh -p` against this repository.
 
