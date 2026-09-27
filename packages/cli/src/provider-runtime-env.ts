@@ -27,8 +27,11 @@ export function createCliProviderRefreshReporter(
       );
     },
     onBuiltinRefreshResult(event: ZCodeBuiltinRefreshEvent) {
-      // TTL 检查不是生产事件；成功更新才默认留痕，不能输出 CDN URL 查询参数或内容。
-      if (event.result === "updated" || process.env.NODE_ENV !== "production") {
+      // 只有成功更新才留痕（revision 来源 CDN，不输出 URL 查询参数或内容）。
+      // TTL skip 不是生产事件：普通终端没有 NODE_ENV，旧的 !== "production"
+      // 条件会让每次运行都打印 "skipped (not-due)"。入口本来就会清洗掉
+      // NODE_ENV，所以这里没有调试开关；失败仍走 onBuiltinRefreshError。
+      if (event.result === "updated") {
         stderr.write(
           `ZCode Built-in ${event.result}${event.reason ? ` (${event.reason})` : ""}${event.revision === undefined ? "" : ` revision=${event.revision} source=CDN`}\n`,
         );
