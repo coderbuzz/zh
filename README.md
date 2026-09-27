@@ -218,25 +218,25 @@ bundler; `ZCODE_BUILD_VERSION=<tag>` overrides the version reported by
 
 ## Layout
 
-- `packages/cli` — entry point and command routing (prompt, protocol servers)
-- `packages/core` — runtime, output, environment
-- `packages/bootstrap` — agent bootstrapping: model factory, skills, auth, telemetry
-- `packages/provider`, `packages/provider-node` — AI SDK providers
-- `packages/adapters` — node adapters (logger, clipboard, search)
-- `packages/dynamic-workflow`, `packages/dynamic-workflow-runtime` — workflow engine
-- `packages/contracts`, `packages/shared`, `packages/shared-types` — types and shared code
-- `packages/i18n`, `packages/telemetry`, `packages/model-option-map` — support modules
-- `packages/zcode-cua` — computer-use broker contracts
-- `bin/zh` — launcher script; `install.sh` — source installer;
-  `install-remote.sh` — one-line remote installer (auto, binary, bundle, or source)
-- `packages/tui` — the interactive terminal interface (`zh tui`), bundled to
+- `packages/cli`: entry point and command routing (prompt, protocol servers)
+- `packages/core`: runtime, output, environment
+- `packages/bootstrap`: agent bootstrapping (model factory, skills, auth, telemetry)
+- `packages/provider`, `packages/provider-node`: AI SDK providers
+- `packages/adapters`: node adapters (logger, clipboard, search)
+- `packages/dynamic-workflow`, `packages/dynamic-workflow-runtime`: workflow engine
+- `packages/contracts`, `packages/shared`, `packages/shared-types`: types and shared code
+- `packages/i18n`, `packages/telemetry`, `packages/model-option-map`: support modules
+- `packages/zcode-cua`: computer-use broker contracts
+- `bin/zh`: launcher script; `install.sh`: source installer;
+  `install-remote.sh`: one-line remote installer (auto, binary, bundle, or source)
+- `packages/tui`: the interactive terminal interface (`zh tui`), bundled to
   `dist/index.js` and kept external from the CLI bundle;
-  `scripts/stage-tui-runtime.mjs` — builds the TUI runtime release asset
-- `.github/workflows/release.yml` — release pipeline: bundle, standalone
-  binaries, and checksums published on every `v*` tag
-- `config/provider/zcode-builtin.json` — bundled provider/model catalog the CLI
+  `scripts/stage-tui-runtime.mjs`: builds the TUI runtime release asset
+- `.github/workflows/release.yml`: release pipeline (bundle, standalone
+  binaries, and checksums published on every `v*` tag)
+- `config/provider/zcode-builtin.json`: bundled provider/model catalog the CLI
   seeds from on first run
-- `patches/` — pinned `@ai-sdk` patches applied on install
+- `patches/`: pinned `@ai-sdk` patches applied on install
 
 ## Status
 
