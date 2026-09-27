@@ -21,6 +21,11 @@ while [ -L "$target" ]; do
 done
 ROOT=$(cd "$(dirname "$target")/.." && pwd)
 
+# Source runs have no compile-time __CLI_VERSION__ define; run.ts falls back
+# to this env var so `zh version` reports the repo version instead of 0.0.0.
+ZCODE_BUILD_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/package.json" | head -1)
+export ZCODE_BUILD_VERSION
+
 # Fresh bun installs land in ~/.bun/bin before the shell profile is reloaded.
 PATH="$HOME/.bun/bin:$ROOT/node_modules/.bin:$PATH"
 
