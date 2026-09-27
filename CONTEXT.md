@@ -17,7 +17,7 @@ can browse with a real Chromium. Install is one line:
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-Latest release: **v0.2.0** (first release carrying the interactive TUI). License: MIT (owner's call; upstream zcode is
+Latest release: **v0.2.1** (TUI release plus the prompt-run stderr noise fix). License: MIT (owner's call; upstream zcode is
 Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 
 ## Current state (verified, not aspirational)
