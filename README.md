@@ -1,6 +1,9 @@
 # zh
 
 Headless agent runner built from [zcode](https://github.com/coderbuzz/zcode).
+Runs fully headless for VMs and orchestrators, with the full interactive TUI
+when you need it.
+
 It packages the zcode CLI for machines with no display: an orchestrator sends a
 prompt over SSH or stdio, the agent plans, calls tools, and returns the result.
 Headless runs never require a display server. For interactive sessions, `zh
