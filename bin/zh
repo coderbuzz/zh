@@ -8,6 +8,10 @@
 #   1. bun  + packages/cli/src/main.ts   (source checkout, freshest code)
 #   2. bun  + dist/zcode.cjs             (release bundle)
 #   3. node + dist/zcode.cjs             (bundle, no bun installed)
+#
+# install-remote.sh --method=auto may write $ROOT/.zh-runtime pinning the
+# absolute paths of the runtimes it validated (used when they live outside the
+# default PATH, e.g. version managers); pinned binaries win over PATH lookup.
 set -u
 
 # Follow symlinks so the launcher works when invoked through ~/.local/bin/zh.
@@ -23,25 +27,37 @@ ROOT=$(cd "$(dirname "$target")/.." && pwd)
 
 # Source runs have no compile-time __CLI_VERSION__ define; run.ts falls back
 # to this env var so `zh version` reports the repo version instead of 0.0.0.
-ZCODE_BUILD_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/package.json" | head -1)
-export ZCODE_BUILD_VERSION
+# Bundle layouts ship no package.json at ROOT, so guard the sed call.
+if [ -f "$ROOT/package.json" ]; then
+  ZCODE_BUILD_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/package.json" | head -1)
+  export ZCODE_BUILD_VERSION
+fi
+
+ZH_RUNTIME_BUN=${ZH_RUNTIME_BUN:-}
+ZH_RUNTIME_NODE=${ZH_RUNTIME_NODE:-}
+if [ -f "$ROOT/.zh-runtime" ]; then
+  . "$ROOT/.zh-runtime"
+fi
 
 # Fresh bun installs land in ~/.bun/bin before the shell profile is reloaded.
 PATH="$HOME/.bun/bin:$ROOT/node_modules/.bin:$PATH"
 
+BUN_BIN=${ZH_RUNTIME_BUN:-$(command -v bun 2>/dev/null || true)}
+NODE_BIN=${ZH_RUNTIME_NODE:-$(command -v node 2>/dev/null || true)}
+
 SOURCE_ENTRY="$ROOT/packages/cli/src/main.ts"
 BUNDLE_ENTRY="$ROOT/dist/zcode.cjs"
 
-if [ -f "$SOURCE_ENTRY" ] && command -v bun >/dev/null 2>&1; then
-  exec bun "$SOURCE_ENTRY" "$@"
+if [ -f "$SOURCE_ENTRY" ] && [ -n "$BUN_BIN" ]; then
+  exec "$BUN_BIN" "$SOURCE_ENTRY" "$@"
 fi
 
 if [ -f "$BUNDLE_ENTRY" ]; then
-  if command -v bun >/dev/null 2>&1; then
-    exec bun "$BUNDLE_ENTRY" "$@"
+  if [ -n "$BUN_BIN" ]; then
+    exec "$BUN_BIN" "$BUNDLE_ENTRY" "$@"
   fi
-  if command -v node >/dev/null 2>&1; then
-    exec node "$BUNDLE_ENTRY" "$@"
+  if [ -n "$NODE_BIN" ]; then
+    exec "$NODE_BIN" "$BUNDLE_ENTRY" "$@"
   fi
 fi
 
