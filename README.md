@@ -43,6 +43,19 @@ curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-re
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=source
 ```
 
+What `auto` does, in order:
+
+1. Looks for a usable runtime — `bun` (any 1.x) or `node` >= 22 — in `PATH`
+   first, then known install locations: `~/.bun/bin`, `/usr/local/bin`,
+   `/opt/homebrew/bin`, and `~/.nvm/versions/node/*` for node.
+2. Runtime found → installs the bundle. Runtimes whose directory is not in
+   `PATH` are recorded in `~/.local/share/zheadless/.zh-runtime`, and the
+   launcher prefers those pinned binaries, so `zh` also works in
+   non-interactive shells.
+3. No runtime → installs the standalone binary for this OS/arch. If the
+   release has no binary asset for the platform, the install fails with
+   instructions to install bun or node (or force `--method=bundle`).
+
 Files live under `~/.local/share/zheadless` (`--home` to change) and the
 launcher goes to `~/.local/bin/zh` (`--prefix` to change). Re-running the
 installer repairs an existing install; remove everything with:
