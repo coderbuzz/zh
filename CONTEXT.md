@@ -17,7 +17,7 @@ can browse with a real Chromium. Install is one line:
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-Latest release: **v0.1.3**. License: MIT (owner's call; upstream zcode is
+Latest release: **v0.2.0** (first release carrying the interactive TUI). License: MIT (owner's call; upstream zcode is
 Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 
 ## Current state (verified, not aspirational)
@@ -41,9 +41,10 @@ Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   missing (see open threads).
 - Release pipeline: GitHub Actions on `v*` tags (`.github/workflows/
   release.yml`). Publishes bundle, 4 standalone binaries
-  (linux/darwin x64+arm64), playwright-core driver asset, SHA256SUMS.
+  (linux/darwin x64+arm64, each carrying `dist/zcode.cjs` for the TUI
+  re-exec), playwright-core driver, TUI runtime asset, SHA256SUMS.
   `zh version` comes from the tag via `ZCODE_BUILD_VERSION` (bundle) and
-  `--define` (binary); source builds read the root package.json.
+  `--define` (binary); source runs take it from the launcher's env export.
 - Build: workspace packages compile with `tsc` via `build-all.sh` in
   dependency order; the CLI bundle is built by Bun.build
   (`packages/cli/scripts/build.mjs`, esbuild fully removed).
