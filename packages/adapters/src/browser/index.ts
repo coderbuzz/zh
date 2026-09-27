@@ -191,8 +191,13 @@ class ManagedCdpBrowserControlPort implements BrowserControlPort {
       try {
         playwright = await this.#loadPlaywright();
       } catch (error) {
+        // 底层原因（如 bundle 安装缺 node_modules/playwright-core）必须透出到消息里，
+        // 否则 agent 和用户只看到笼统的 "pinned runtime" 报错，无法自行诊断修复。
+        const reason = error instanceof Error ? error.message : String(error);
         throw new Error(
-          "Managed headless Chromium is unavailable: failed to load the pinned Playwright runtime.",
+          "Managed headless Chromium is unavailable: failed to load the pinned Playwright runtime. " +
+            `Underlying error: ${reason} ` +
+            "Reinstall to restore the playwright-core driver (bundle/binary: install-remote.sh; source: bun install).",
           { cause: error },
         );
       }
