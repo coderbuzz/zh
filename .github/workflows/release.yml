@@ -18,6 +18,13 @@ jobs:
         with:
           bun-version: latest
 
+      # ubuntu-latest dropped npm from PATH between the v0.3.0 and v0.4.0
+      # runs (stage-tui-runtime.mjs npm-packs the three non-host OpenTUI
+      # native triplets). Pin node and npm explicitly.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install dependencies and build workspace packages
         run: |
           bun install --frozen-lockfile
