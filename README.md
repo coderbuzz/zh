@@ -1,6 +1,6 @@
 # zh
 
-Headless agent runner built from [zcode](https://github.com/coderbuzz/zcode).
+Headless agent runner built from [ZCode](https://github.com/zai-org/ZCode).
 Runs fully headless for VMs and orchestrators, with the full interactive TUI
 when you need it.
 
@@ -264,4 +264,4 @@ If you find a gap, the fastest path is `zh -p` against this repository.
 ## License
 
 [MIT](LICENSE). This repository builds on code extracted from the
-[zcode](https://github.com/coderbuzz/zcode) project.
+[ZCode](https://github.com/zai-org/ZCode) project.

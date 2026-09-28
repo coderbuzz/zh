@@ -6,8 +6,8 @@ expensive way.
 
 ## What this repo is
 
-zheadless (`zh`) is a headless agent runner extracted from the zcode
-monorepo (github.com/coderbuzz/zcode). It packages the zcode CLI agent for
+zheadless (`zh`) is a headless agent runner extracted from the ZCode
+monorepo (github.com/zai-org/ZCode). It packages the zcode CLI agent for
 machines with no display: an orchestrator sends a prompt (`zh -p`) or holds a
 long-lived stdio protocol connection (`zh app-server` / `zh agent-server`),
 and the agent plans, calls tools, loads skills, drives dynamic workflows, and
@@ -17,7 +17,9 @@ can browse with a real Chromium. Install is one line:
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-Latest release: **v0.3.0** (runtime-aware `auto` installer default, bundle launcher sed guard + runtime pins, playwright load errors surface their cause). License: MIT (owner's call; upstream zcode is
+Latest release: **v0.4.0** (vendor branch baseline: the zcode v3.14.3 update
+ported through the `vendor/upstream` merge; THIRD-PARTY-NOTICES and the
+third-party inventory adopted). License: MIT (owner's call; upstream zcode is
 Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 
 ## Current state (verified, not aspirational)
