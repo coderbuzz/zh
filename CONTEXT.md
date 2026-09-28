@@ -101,6 +101,40 @@ Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   (`BUN_BE_BUN=1`) running the on-disk `dist/zcode.cjs`, which is why binary
   release tarballs now also carry `dist/zcode.cjs`.
 
+## Upstream sync (vendor branch)
+
+zheadless tracks `zai-org/ZCode` releases directly. The fork
+`coderbuzz/zcode` is out of the update path (merged once at v3.14.3, then
+dormant; it only matters if full-monorepo work resumes).
+
+- `vendor/upstream` is a generated branch holding verbatim copies of the
+  tracked zcode files, laid out like this repo: 17 packages (11 from
+  `apps/zcode-cli/packages`, 6 from the monorepo root),
+  `config/provider/zcode-builtin.json`, `patches/@ai-sdk__*.patch`,
+  `third-party/`, `THIRD-PARTY-NOTICES.md`. Written only by
+  `scripts/sync-vendor.sh`. Patch the copies on main, never on the vendor
+  branch.
+- Per release: fetch the tag in a zcode clone, run
+  `ZCODE_REPO=<clone> sh scripts/sync-vendor.sh <rev>`, then on main
+  `git merge vendor/upstream`, and tag the vendor tip `vendor/vX.Y.Z`. Git
+  re-applies this repo's patch layer three-way; a conflict means upstream
+  touched the same hunk. Vendor merges land as real merge commits on main,
+  never squashed: the ancestry is what makes the next sync a 3-way merge.
+- Patch layer to keep or drop consciously on each sync: Bun-safe `node:sea`
+  probes (core/environment, cli/sea-playwright-runtime,
+  cli/tui-runtime-loader), install-root walk-up lookups
+  (bootstrap/bundled-plugins, cli/provider-runtime-env,
+  cli/sea-playwright-runtime), TUI re-exec through `dist/zcode.cjs`,
+  official-plugins paths, the version fallback in cli/run.ts, the Bun
+  bundler scripts (cli, tui), the enriched provider catalog, and the
+  playwright error-cause surfacing in adapters/browser. Drop a patch the day
+  upstream fixes the same problem.
+- The script prints NOTICE lines for upstream files under the mapped roots
+  that it did not vendor (a new package, a new cli/tui build script, a new
+  patch file). Each line is a mapping decision, not noise.
+- Baseline: `vendor/v3.14.3` (snapshot base 4da0360, then 29628c9). The
+  first merge into main carried the v3.14.0-to-v3.14.3 update in one step.
+
 ## Gotchas (learned the hard way)
 
 - **The desktop ZCode app pollutes the environment on this Mac.** Its
