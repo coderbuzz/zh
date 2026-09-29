@@ -78,6 +78,28 @@ async function writeAll(credentialsFile: string, data: Record<string, string>): 
   await atomicWritePrivateTextFile(credentialsFile, `${JSON.stringify(data, null, 2)}\n`);
 }
 
+// 解密失败最常见于凭据从另一台机器迁移：cipher secret 派生自
+// platform/homedir/username，跨机器必然不匹配。上层（OAuth 会话清理）随后会
+// 按强制登出语义删除这些条目，所以这里必须在首次失败时就留下可恢复的证据。
+let didBackupUndecryptableCredentials = false;
+async function backupUndecryptableCredentials(credentialsFile: string): Promise<void> {
+  if (didBackupUndecryptableCredentials) {
+    return;
+  }
+  didBackupUndecryptableCredentials = true;
+  const backupPath = await backupCorruptFile(credentialsFile).catch(() => undefined);
+  logger.warn(
+    undefined,
+    "credential value failed to decrypt; the store was likely written on another machine",
+    {
+      credentialsFile,
+      backupPath,
+      remedy:
+        "set ZCODE_CREDENTIAL_SECRET to the source machine secret and restore the backup, or sign in again on this machine",
+    },
+  );
+}
+
 interface CredentialServiceDependencies {
   cipherProvider?: CredentialCipherProvider;
   /** Host 私有的持久化成功通知；不进入 Renderer/RPC 凭据接口。 */
@@ -98,7 +120,13 @@ export function createCredentialService(
         return null;
       }
 
-      return cipherProvider.decrypt(rawValue);
+      try {
+        return cipherProvider.decrypt(rawValue);
+      } catch (error) {
+        // 备份后按原语义抛错：调用方（如 OAuth 会话清理）的强制登出行为不变。
+        await backupUndecryptableCredentials(getCredentialsFile());
+        throw error;
+      }
     },
 
     async save(key: string, value: string): Promise<void> {
