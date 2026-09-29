@@ -25,6 +25,7 @@ import { runPrompt } from "./prompt-command.js";
 import { runPluginsCommand, type PluginsCommandFlags } from "./plugins-command.js";
 import { runSkillsCommand } from "./skills-command.js";
 import { runTuiCommand } from "./tui-command.js";
+import { runWebCommand, type WebCommandValues } from "./web-command.js";
 import type {
   CliPermissionMode,
   CliResumeRequest,
@@ -573,6 +574,25 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
       );
     case "skills":
       return await runSkillsCommand(ctx, options, commandDeps, parsed.positionals.slice(1));
+    case "web": {
+      const webValues: WebCommandValues = {
+        host: parsed.values.host as string | undefined,
+        ...(typeof parsed.values.port === "string" ? { port: Number(parsed.values.port) } : {}),
+        workspace: parsed.values.workspace as string | undefined,
+        ...(parsed.values.open === true ? { open: true } : {}),
+        ...(parsed.values["no-open"] === true ? { "no-open": true } : {}),
+        token: parsed.values.token as string | undefined,
+        ...(parsed.values["no-token"] === true ? { "no-token": true } : {}),
+      };
+      if (
+        webValues.port !== undefined &&
+        (!Number.isInteger(webValues.port) || webValues.port < 0 || webValues.port > 65535)
+      ) {
+        ctx.stderr.write("--port must be an integer between 0 and 65535\n");
+        return 1;
+      }
+      return await runWebCommand(ctx, webValues);
+    }
     case "tui":
       return await runTuiCommand(
         ctx,
