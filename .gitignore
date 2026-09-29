@@ -7,3 +7,6 @@ dist/
 .env.*
 .zcodeignore
 out/
+
+# tailwind pre-pass output for the web build
+packages/web/.build/
