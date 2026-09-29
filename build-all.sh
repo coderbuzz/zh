@@ -57,5 +57,19 @@ else
   exit 1
 fi
 
+# server bundles its HTTP entry with Bun.build (packages/server/scripts).
+# The zh web runtime also needs the staged dependency tree; build that with
+# scripts/stage-server-runtime.mjs when preparing a release or running zh web.
+printf "%-26s" "server:" >> "$STATUS"
+if bun packages/server/scripts/build.mjs > /tmp/tsc-server.log 2>&1; then
+  echo "OK" >> "$STATUS"
+  echo "server: OK" >&2
+else
+  echo "FAIL (see /tmp/tsc-server.log)" >> "$STATUS"
+  echo "server: FAIL" >&2
+  tail -5 /tmp/tsc-server.log >&2
+  exit 1
+fi
+
 echo "ALL_DONE" >> "$STATUS"
 echo "all packages built" >&2
