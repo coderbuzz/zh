@@ -25,7 +25,7 @@ set -eu
 
 VENDOR_BRANCH=vendor/upstream
 APPS_PACKAGES="adapters bootstrap cli contracts core dynamic-workflow dynamic-workflow-runtime i18n shared-types telemetry tui"
-ROOT_PACKAGES="formal-proof model-option-map provider provider-node shared zcode-cua"
+ROOT_PACKAGES="formal-proof model-option-map provider provider-node shared zcode-cua rpc client services server web"
 
 die() {
   echo "sync-vendor: $*" >&2
