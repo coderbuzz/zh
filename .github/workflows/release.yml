@@ -8,8 +8,56 @@ on:
 permissions:
   contents: write
 
+env:
+  # packages/web and the web-mode runtime build against the upstream monorepo
+  # checkout at the vendor branch baseline. Update when the vendor branch moves.
+  ZCODE_VENDORED_REV: 29628c9acdb81b703bbd4080c207a0e7ce5e276e
+
 jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: zai-org/ZCode
+          ref: ${{ env.ZCODE_VENDORED_REV }}
+          path: zcode
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The zh web overlay replaces the upstream packages/web (branding patches
+      # plus the Bun build script); @zcode/ui and the rest stay upstream.
+      - name: Overlay zh packages/web onto the monorepo
+        run: rsync -a --delete "$GITHUB_WORKSPACE/packages/web/" "$GITHUB_WORKSPACE/zcode/packages/web/"
+
+      - name: Install monorepo dependencies
+        working-directory: zcode
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Build web dist with Bun
+        working-directory: zcode
+        env:
+          TAG: ${{ github.ref_name }}
+        run: ZCODE_BUILD_VERSION="$TAG" bun packages/web/scripts/build.mjs
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: zcode/packages/web/dist
+
   packages:
+    needs: build-web
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +72,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: packages/web/dist
 
       - name: Install dependencies and build workspace packages
         run: |
@@ -65,6 +118,17 @@ jobs:
           # as its own asset and the installer extracts it into
           # <install root>/node_modules
           bun scripts/stage-tui-runtime.mjs --out out --tag "$TAG"
+
+          # web mode (zh web): the CI-built web dist plus the staged server
+          # runtime (entry-http.js + external dependency tree with node-pty
+          # prebuilds). Extracted by install-remote.sh --web into the install
+          # root, where `zh web` finds <root>/web and <root>/server.
+          bun scripts/stage-server-runtime.mjs server-stage
+          STAGE_WEB=$(mktemp -d)
+          cp -R packages/web/dist "$STAGE_WEB/web"
+          cp -R server-stage "$STAGE_WEB/server"
+          tar -czf "out/zheadless-web-$TAG.tar.gz" -C "$STAGE_WEB" web server
+          rm -rf "$STAGE_WEB" server-stage
 
           # standalone binaries (C): bun --compile, cross-compiled per target.
           # dist/zcode.cjs rides along because the interactive TUI needs to
