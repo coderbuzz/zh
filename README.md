@@ -175,6 +175,33 @@ send({ jsonrpc: "2.0", id: 1, method: "v4/connection/flow", params: {} });
 Killing the process (or closing its stdin) shuts the session down cleanly;
 the server reports `Protocol input closed` on stderr and exits.
 
+### Web mode
+
+`zh web` serves the web UI over HTTP and spawns the same agent child, so a
+browser on another machine can run prompts against a workspace:
+
+```sh
+zh web --host 0.0.0.0 --port 4180
+```
+
+The banner prints the local and network URLs with a per-start token. The
+static shell is public by design; `/api/*` and `/ws` are token-gated from a
+non-loopback client (401 without the token, 200 and 101 with the token from
+the banner). Bound to loopback, the default, the server starts with no
+token and gates nothing.
+
+The server runtime needs Node >= 22 on `PATH` (the node-pty native addon);
+`ZH_WEB_NODE` overrides the lookup. The web dist ships as its own release
+asset, `zheadless-web-<tag>.tar.gz`, which `install-remote.sh --web`
+extracts into the install root; `zh web` finds `<root>/web` and
+`<root>/server` by walking up from its own entry.
+
+Upstream web-mode stubs, unchanged: the file picker, the remote workspace
+wizard (SSH, WSL, Docker), the embedded browser, and phone remote render
+but do not drive a real backend. Branding covers the shell surfaces only
+(tab title, favicon, boot logo, and the document title strings in the web
+entry); strings inside `@zcode/ui` stay upstream.
+
 ### Skills
 
 `zh skills list` shows the local skills the agent will load, from
