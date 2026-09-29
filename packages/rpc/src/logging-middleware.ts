@@ -38,6 +38,7 @@ class LoggingServerChannel<TContext> implements IServerChannel<TContext> {
     cancellationToken?: CancellationToken,
   ): Promise<T> {
     const start = performance.now();
+    this.logger(`[rpc:recv] ${this.channelName}.${command}`);
     try {
       const result = await this.inner.call<T>(ctx, command, arg, cancellationToken);
       const elapsed = (performance.now() - start).toFixed(1);

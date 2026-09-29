@@ -433,6 +433,12 @@ export class OAuthCredentialRepo {
     // AES-GCM 解密失败说明当前运行时已经无法信任本地 OAuth 登录态。
     // 等价于强制登出已注册 OAuth provider：先清 provider 命名空间与共享 zcode JWT，
     // 再通知 service 层清理 Start/Coding Plan 这类派生模型凭据，同时避免误删 SSH 等其他独立凭据。
+    // 每个实例（含不带 callback 的）都必须把这次静默登出记录在案：最常见于凭据
+    // 从另一台机器整体迁移，cipher secret 派生自 platform/homedir/username，跨机必然失配。
+    log.warn(undefined, "cleared local OAuth session because credentials failed to decrypt", {
+      providers: this.knownProviderIds,
+      consequence: "the UI will show the login entry on next boot; sign in again on this machine",
+    });
     for (const provider of this.knownProviderIds) {
       await this.clearProvider(provider);
     }

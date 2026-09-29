@@ -202,6 +202,33 @@ but do not drive a real backend. Branding covers the shell surfaces only
 (tab title, favicon, boot logo, and the document title strings in the web
 entry); strings inside `@zcode/ui` stay upstream.
 
+### Moving zcode state to a web server host
+
+`zh web` reads the same `~/.zcode/v2` state as the desktop app. The
+credential store encrypts its values with a key derived from the local
+platform, home directory, and user name, so a `credentials.json` copied
+from another machine cannot be decrypted there. On decrypt failure the
+OAuth session entries are removed (upstream forced-logout semantic) and
+the UI falls back to the welcome screen. Since 0.5.1 this is loud: the
+server logs `credential value failed to decrypt`, backs the original file
+up next to itself as `credentials.json.corrupt-<hash>.bak`, and logs
+`cleared local OAuth session` when the OAuth entries are removed.
+
+Two supported ways to bring state over:
+
+- Set `ZCODE_CREDENTIAL_SECRET` on the web server host to the source
+  machine's secret. With the default derivation the secret is
+  `zcode-credential-fallback:<platform>:<homedir>:<username>`, for example
+  `zcode-credential-fallback:darwin:/Users/indra:indra`. If the source
+  machine already sets `ZCODE_CREDENTIAL_SECRET`, use that same value.
+  Restore the `.bak` backup if the store was already rewritten.
+- Or start clean: copy only `provider_config.json` (API-key providers and
+  model rules) and sign in through the web welcome screen.
+
+The minimal state set for `zh web` is `credentials.json` plus
+`provider_config.json`. `tasks-index.sqlite` and its `-shm`/`-wal`
+sidecars are not needed; do not copy them out of a running desktop app.
+
 ### Skills
 
 `zh skills list` shows the local skills the agent will load, from
