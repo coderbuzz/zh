@@ -20,9 +20,11 @@
 # Usage:
 #   install-remote.sh [--method=auto|binary|bundle|source] [--version=TAG]
 #                     [--home=DIR] [--prefix=DIR] [--asset-dir=DIR]
-#                     [--no-verify] [--no-browser-driver] [--uninstall]
+#                     [--no-verify] [--no-browser-driver] [--web] [--uninstall]
 #
 # --asset-dir loads prebuilt assets from a local directory (offline/dev runs).
+# --web adds the zh web mode runtime (web UI + Node server); it needs Node >= 22
+# at runtime (node-pty native addon) and is available for binary/bundle installs.
 set -eu
 
 REPO="coderbuzz/zheadless"
@@ -36,6 +38,7 @@ PREFIX="$DEFAULT_PREFIX"
 ASSET_DIR=""
 NO_VERIFY=0
 NO_BROWSER_DRIVER=0
+WEB_INSTALL=0
 
 for arg in "$@"; do
   case $arg in
@@ -46,6 +49,7 @@ for arg in "$@"; do
     --asset-dir=*) ASSET_DIR=${arg#--asset-dir=} ;;
     --no-verify) NO_VERIFY=1 ;;
     --no-browser-driver) NO_BROWSER_DRIVER=1 ;;
+    --web) WEB_INSTALL=1 ;;
     --uninstall) METHOD="uninstall" ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -283,6 +287,14 @@ if [ "$METHOD" = "binary" ] || [ "$METHOD" = "bundle" ]; then
     download_asset "zheadless-tui-runtime-$TAG.tar.gz" "$TUI_TMP/tui.tar.gz"
     tar -xzf "$TUI_TMP/tui.tar.gz" -C "$INSTALL_HOME"
     rm -rf "$TUI_TMP"
+  fi
+  if [ "$WEB_INSTALL" = "1" ]; then
+    [ -n "$TAG" ] || { echo "--web needs a release tag; use --version=TAG or a default install" >&2; exit 1; }
+    say "installing web mode runtime (needs Node >= 22 for zh web)"
+    WEB_TMP=$(mktemp -d)
+    download_asset "zheadless-web-$TAG.tar.gz" "$WEB_TMP/web.tar.gz"
+    tar -xzf "$WEB_TMP/web.tar.gz" -C "$INSTALL_HOME"
+    rm -rf "$WEB_TMP"
   fi
 fi
 

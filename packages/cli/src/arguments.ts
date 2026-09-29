@@ -104,6 +104,29 @@ export const parseGlobalArgs = (argv: string[]) =>
         multiple: true,
         type: "string",
       },
+
+      // zh web 的选项在全局注册（与 plugins 的选项同一理由），run.ts 只在 web 命令里消费。
+      host: {
+        type: "string",
+      },
+      port: {
+        type: "string",
+      },
+      workspace: {
+        type: "string",
+      },
+      open: {
+        type: "boolean",
+      },
+      "no-open": {
+        type: "boolean",
+      },
+      token: {
+        type: "string",
+      },
+      "no-token": {
+        type: "boolean",
+      },
     },
     strict: true,
   });

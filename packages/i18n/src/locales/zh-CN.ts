@@ -24,6 +24,7 @@ export const zhCN: ZCodeCopy = {
   skills     列出本地 skills（\`skills list\`）
   tui        打开终端 UI
   version    打印 CLI 版本
+  web        启动浏览器 UI（--host --port --workspace --token）
 
 选项:
   -h, --help       显示帮助

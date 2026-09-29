@@ -1,0 +1,157 @@
+# Handoff: `zh web` (open thread #1), session 2026-09-29
+
+Written from the 2026-09-29 session that had to stop mid-verification (browser
+automation calls kept getting cancelled on this machine; the work continues on
+another machine). Read CONTEXT.md first, then this file. Everything below is
+verified fact unless labeled otherwise.
+
+## Where things stand
+
+Branch `feat/zh-web` (based on main at 40e5ab9e, the vendor merge) holds all
+implementation commits:
+
+- 0eb02ec1 feat(cli): add the zh web command
+- ea715d92 feat(web): zh branding and the Bun web build
+- baadef3b feat(server): bundle the HTTP entry with Bun and stage its runtime
+- 3065514e build(ci): ship the zh web release asset
+
+On main (already pushed): `scripts/sync-vendor.sh` tracks
+`rpc client services server web`; the vendor branch was regenerated at the
+same baseline (zcode v3.14.3 = 29628c9, vendor commit 6745ff8) and merged as
+40e5ab9e "Merge vendor/upstream: zcode v3.14.3 web mode packages". 22 packages
+now live on the vendor branch. main and vendor/upstream are pushed.
+
+## What was researched and decided (do not re-litigate)
+
+- **Bun.build fully replaces Vite for packages/web.** Verified empirically on
+  bun 1.4.2 against the real app (not a toy): HTML entry, `define` including
+  `import.meta.env.*` keys, `alias`, and JSX all work. Reference comparison at
+  the same rev: vite 144 MB / 6137 files / 2246 sourcemaps vs bun 60-63 MB /
+  ~3956 files / 0 maps.
+- **Three Bun.build gaps, all handled in `packages/web/scripts/build.mjs`:**
+  1. `new Worker(new URL(...), import.meta.url)` is not transformed: two ui
+     sites (diffs worker, workspace file-search worker) are text-rewritten to
+     `/workers/*.js` public paths and built as separate worker bundles. The
+     diffs worker must bundle `@pierre/diffs/worker/worker.js` directly as the
+     entry or its side-effect-only import tree-shakes to 0 bytes (the upstream
+     vite config disables treeshake for workers for the same reason).
+  2. `?url` imports (pdf.js worker .mjs, two .wasm) need an onResolve+onLoad
+     plugin with a namespace and the `file` loader.
+  3. `new URL("../../../public/icon_512@2x.png", import.meta.url)` in
+     UpdateStatusDialog is rewritten to `/icon_512@2x.png` (icon copied into
+     dist; dialog is unreachable in web mode anyway).
+- **Tailwind v4**: the `@tailwindcss/vite` plugin is replaced by a pinned
+  `bunx @tailwindcss/cli@4.2.2` pre-pass over `packages/ui/src/styles.css`
+  (same compiler; 499 KB CSS in ~0.2 s; all `@import`/`@plugin` resolved).
+  KaTeX fonts are staged next to the generated CSS so Bun.build inlines them
+  as data URLs (that is why the bun dist is a few MB larger than vite's).
+- **index.html script src must be relative** (`./src/main.tsx`): Bun.build
+  resolves root-absolute paths against cwd.
+- **Server build**: tsup/esbuild are NOT used (repo policy: esbuild removed).
+  `packages/server/scripts/build.mjs` (Bun.build) emits `dist/entry-http.js`
+  only; the upstream `dist/remote` single-file bundle is intentionally not
+  built. Externals: ssh2, node-pty, undici, axios, form-data, combined-stream,
+  proxy-from-env, follow-redirects, node-forge, yaml, yazl, yauzl.
+- **The server runs under Node >= 22, not bun** (node-pty native addon) --
+  owner decision, keep it. Agent child stays under bun.
+- **The web server resolves its node binary** from `ZH_WEB_NODE` env, then
+  `.zh-runtime` `ZH_RUNTIME_NODE`, then PATH, then errors with a clear message
+  (version-checked >= 22).
+- **node-pty prebuilds**: npm node-pty 1.1.0 ships only darwin/win32
+  prebuilds; linux ones come from the four `@lydell/node-pty-*@1.2.0-beta.10`
+  packages. bun install skips os/cpu-gated packages, so
+  `scripts/stage-server-runtime.mjs` fetches missing ones from the registry
+  (Bun fetch of registry.npmjs.org metadata + tarball, then tar -xzf).
+  Root devDependencies were tried and do NOT help; do not add them back.
+- **packages/web is excluded from the zh workspace** (`"workspaces":
+  ["packages/*", "!packages/web"]`) because `@zcode/ui` is deliberately not
+  vendored and `bun install` would fail. Web builds only in CI, inside an
+  upstream monorepo checkout.
+- **One release asset** `zheadless-web-<tag>.tar.gz` containing `web/` +
+  `server/`, extracted by `install-remote.sh --web` into the install root.
+  `zh web` finds `<root>/server/entry-http.js` + `<root>/web/` by walking up
+  from the real entry anchor (bundle path or execPath for the binary), or the
+  source layout `packages/server/dist` + `packages/web/dist`.
+- **Branding scope** (owner decision): tab title, favicon, boot logo, and the
+  four document.title strings in main.tsx are zh. Strings inside @zcode/ui
+  stay upstream; document as a limitation, do not patch @zcode/ui.
+- `zh web --help` shows the GLOBAL help (run.ts intercepts --help before
+  command dispatch). Do not add per-command help handling.
+
+## Verification evidence (2026-09-29, this machine)
+
+All with every `ZCODE_*` var stripped (desktop app pollution; use the wrapper
+recipe in CONTEXT.md gotchas or: `for v in $(env | sed -n
+'s/^\(ZCODE_[^=]*\)=.*/\1/p'); do unset "$v"; done`).
+
+1. Clean-room build PASS: `rm -rf node_modules packages/*/dist` then
+   `bun install && sh build-all.sh` -> 15/15 OK (13 tsc packages, tui, server).
+2. `bun run typecheck` in packages/cli PASS (one fix applied: the duplicate
+   `help === true` narrowing in run.ts).
+3. CLI bundle built: `packages/cli/dist/zcode.cjs` 24.8 MB.
+4. Web dist built via CI-overlay simulation (rsync packages/web into the
+   ../zcode clone checkout at 29628c9, `pnpm install` once because rsync
+   --delete removes pnpm's per-package node_modules links, then
+   `ZCODE_BUILD_VERSION=0.4.0-local bun packages/web/scripts/build.mjs`):
+   60 MB, version string verified inside a chunk. The dist lives at
+   `packages/web/dist` in this repo now (gitignored) so `zh web` source-layout
+   resolution works locally.
+5. Server runtime staged: `/tmp/zh-server-stage` (88 MB) with entry-http.js,
+   notices, and all four platform node-pty prebuilds
+   (darwin-arm64/x64, linux-arm64/x64).
+6. **zh web ran end-to-end from the bundle**:
+   `bun packages/cli/dist/zcode.cjs web --port 4180 --no-open` from
+   `/tmp/zh-web-ws` -> banner printed, agent child =
+   `bun .../dist/zcode.cjs app-server --stdio`, server log showed
+   `zcode-server:http http://127.0.0.1:4180`, and the browser loaded the UI:
+   tab title **"zh - Web + Server"**, sidebar rendered with real workspace
+   history (zh-web-ws project visible).
+7. Earlier standalone smoke test (same bun dist, static file server, no
+   backend): title "ZCode - Web" set at runtime and the correct
+   "Web bootstrap failed / WebSocket connection failed" screen rendered --
+   proves the bundle executes without a dev server.
+
+## Remaining work (in order)
+
+1. **Browser chat round-trip** against `zh web` (port 4180 recipe above):
+   send "balas persis satu kata: SIAP", expect the exact reply. Close the
+   command palette (Escape) first; the composer is a textbox below.
+   NOTE: on the 2026-09-29 machine the browser tool cancelled on
+   `tab.cua.keypress` repeatedly; use playwright locators or a fresh machine.
+2. **PTY terminal test**: open the terminal panel, run `echo hi` and
+   `git branch --show-current`, verify output.
+3. **Auth checks** (server running with `--host 0.0.0.0`):
+   - `curl -s -o /dev/null -w "%{http_code}" http://<lan-ip>:<port>/` from
+     OUTSIDE the machine (or another container) must be 401 without token;
+   - `http://<lan-ip>:<port>/?token=<token from banner>` must load (200 +
+     app boots). Loopback stays tokenless by default.
+4. **Container test** (OrbStack, debian:bookworm-slim): install bun + node,
+   then the release layout by hand (bundle tarball content + staged web/server
+   tree, or run install-remote.sh with --asset-dir pointing at locally built
+   assets), start `zh web --host 0.0.0.0 --port 4180`, and repeat the chat
+   round-trip from the host against the container IP with a token.
+   `scripts/stage-server-runtime.mjs` output + `packages/cli/dist/zcode.cjs`
+   + `bin/zh` + `packages/web/dist` is exactly the release layout
+   (`<root>/bin/zh`, `<root>/dist/zcode.cjs`, `<root>/web/`, `<root>/server/`).
+5. **Docs**: close CONTEXT.md open thread #1 with the final decisions and this
+   evidence; README section for web mode (usage, Node >= 22 requirement,
+   limitations: file picker, remote workspace wizard SSH/WSL/Docker, embedded
+   browser, phone-remote are upstream stubs; @zcode/ui strings stay upstream;
+   web dist is built in CI, not locally). Follow the antislop rules.
+6. **PR**: push feat/zh-web (done), open PR, squash-merge, delete branch.
+   Bump root version (0.5.0) in the same round if releasing immediately;
+   CI already builds the web asset on the next tag.
+7. Before merging, re-check `.github/workflows/release.yml` job wiring only
+   by reading (build-web -> packages needs web-dist artifact; ZCODE_VENDORED_REV
+   env must match the vendor baseline; update it when vendor moves).
+
+## Handy paths and commands
+
+- Clean-env wrapper from this session: `/tmp/zh-clean-env.sh` (recreate from
+  the snippet above; it just unsets every ZCODE_* var and execs).
+- Run zh web locally (bundle path):
+  `cd /tmp/zh-web-ws && bun .../packages/cli/dist/zcode.cjs web --port 4180 --no-open`
+- Rebuild web dist locally (needs the ../zcode clone at 29628c9 with pnpm
+  install done): rsync overlay per step 4 above.
+- Rebuild server bundle + runtime: `bun packages/server/scripts/build.mjs`
+  then `bun scripts/stage-server-runtime.mjs /tmp/zh-server-stage`.
