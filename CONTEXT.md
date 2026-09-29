@@ -17,10 +17,8 @@ can browse with a real Chromium. Install is one line:
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-Latest release: **v0.4.0** (vendor branch baseline: the zcode v3.14.3 update
-ported through the `vendor/upstream` merge; THIRD-PARTY-NOTICES and the
-third-party inventory adopted). License: MIT (owner's call; upstream zcode is
-Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
+Latest release: **v0.5.0** (zh web mode; PR #28). License: MIT (owner's call;
+upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 
 ## Current state (verified, not aspirational)
 
@@ -186,29 +184,44 @@ dormant; it only matters if full-monorepo work resumes).
 
 ## Open threads
 
-1. **zh as a browser-accessible UI server** (implementation complete on
-   `feat/zh-web`, verification done 2026-09-29, PR pending): upstream's web
-   mode does NOT embed the agent in-process; the server (packages/server,
-   Hono + WS) spawns the agent over the identical v4 stdio protocol, so
-   `zh app-server` fits directly. Vite was replaced by Bun.build end to end.
-   Final owner decisions: branding zh on the web shell surfaces only, web
-   dist built in CI against the pinned monorepo rev (29628c9), server runtime
-   under Node >= 22, one zheadless-web release asset. Verified on the host:
-   clean-room build 15/15, `zh web` end-to-end from the bundle (banner, agent
-   child, UI title "zh - Web + Server"), auth (401 tokenless non-loopback on
-   /api and /ws, 200/101 with the per-start banner token, static shell public
-   by design), browser command palette opens with Cmd+K and closes with
-   Escape, chat round-trip with exact-match reply "SIAP" through the UI and
-   through `zh -p` directly, PTY terminal (echo hi, git branch --show-current,
-   cwd proof). Container debian:bookworm-slim (OrbStack): release layout and
-   auth PASS; chat round-trip FAILS (shell blank after onboarding skip; the
-   client boot gate `shouldBlockRootRender` never clears, the container
-   client stops at 8 boot RPCs vs 48 on the host, and no agent child process
-   exists in the container /proc; web mode renders nothing while the gate
-   blocks because `isDesktop` is false, so there is no loading screen).
-   Open question left open on purpose: whether that is an artifact of
-   copying host v2 state into a fresh container or a real web-mode boot gate
-   bug; a fresh container with only credentials.json separates the two.
+1. **zh as a browser-accessible UI server** (RESOLVED 2026-09-29, second
+   session): implementation shipped in v0.5.0 (PR #28). Host verification was
+   already green; the container round-trip failure is now root-caused and the
+   earlier open question is answered. Root cause: the credential store cipher
+   derives its key from platform/homedir/username
+   (`services/src/credential/providers/credentialCipherProvider.ts`), so v2
+   state copied from the Mac can never decrypt inside the container; the
+   OAuth repo then clears the session entries silently (upstream forced
+   logout) and rewrites `credentials.json`, the UI loses the account, and
+   after the onboarding wizard Root renders an empty shell (no workspace, no
+   welcome gate, `shouldShowRootStartupLoading` false on web). Both original
+   hypotheses are settled: H1 (live sqlite copy) is WRONG; a fresh container
+   with only `credentials.json` + `provider_config.json` reproduces the
+   failure, and `zh -p` answers exactly SIAP in the same container. H2 (a
+   web-mode boot gate bug) is also WRONG: with the correct
+   `ZCODE_CREDENTIAL_SECRET` the identical container passes everything.
+   Evidence (debian:bookworm-slim, release layout /opt/zh from the v0.5.0
+   assets): auth 200 public shell / 401,401,401 tokenless or wrong token on
+   `/api/*` and `/ws` / 200,101 with the banner token; browser matrix via
+   playwright-core + host Chrome: palette Cmd+K open, Escape close, chat
+   round-trip with exact sentinel reply, PTY `echo hi` + `git branch
+   --show-current`; host matrix re-run green with the patched code. The
+   agent child is spawned LAZILY at first browser boot, not at server
+   start; a `/proc` scan before the first browser connect correctly shows
+   no agent child.
+   Fixes in this repo (no `@zcode/ui` patches): `credentialService.load`
+   backs the store up once (`credentials.json.corrupt-<hash>.bak`) and logs
+   a remedy-bearing warning on the first decrypt failure;
+   `OAuthCredentialRepo.clearCorruptOAuthSession` logs the forced logout
+   (the server wiring at `services/src/node.ts` builds repo instances whose
+   callback was silent); `packages/rpc` logging middleware also logs
+   `[rpc:recv]` at call arrival, which is how hanging-vs-never-called RPCs
+   get told apart. README documents cross-machine staging
+   (`ZCODE_CREDENTIAL_SECRET` formula) and the minimal v2 file set. Known
+   upstream leftover, left as-is: the cleaned intermediate state (residual
+   api-key entry, no OAuth session) blanks after the wizard instead of
+   showing the welcome screen; reachable only through the migration trap
+   above, so the warnings plus documentation are the chosen mitigation.
 2. Protocol handshake worked example for the README (frames are schema-rich;
    needs a real client session to capture).
 3. Windows binaries; darwin signing.
