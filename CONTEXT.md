@@ -186,14 +186,14 @@ dormant; it only matters if full-monorepo work resumes).
 
 ## Open threads
 
-1. **zh as a browser-accessible UI server** (next session): explore serving
-   an orchestrator UI from `zh` like the zcode remote feature
-   (zcode.z.ai/remote/v4). The 2026-09-27 research found: upstream's web UI
-   speaks a binary RPC channel protocol served by `packages/server` plus an
-   in-process agent embedding in `@zcode/services` (87k LOC), so adopting it
-   means a second product extraction. The feasible path is a small `zh web`
-   command bridging WebSocket to the v4 app-server; the v4 surface already
-   has everything a chat UI needs. Discussion pending with the owner.
+1. **zh as a browser-accessible UI server** (IN PROGRESS on `feat/zh-web`,
+   read HANDOFF.md at the repo root for state, decisions, and the remaining
+   checklist): upstream's web mode does NOT embed the agent in-process; the
+   server (packages/server, Hono + WS) spawns the agent over the identical v4
+   stdio protocol, so `zh app-server` fits directly. Vite was replaced by
+   Bun.build end to end. Final owner decisions: branding zh on the web shell
+   surfaces only, web dist built in CI against the pinned monorepo rev, server
+   runtime under Node >= 22, one zheadless-web release asset.
 2. Protocol handshake worked example for the README (frames are schema-rich;
    needs a real client session to capture).
 3. Windows binaries; darwin signing.
