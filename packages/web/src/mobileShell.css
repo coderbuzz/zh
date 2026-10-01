@@ -1,0 +1,57 @@
+/*
+ * Drawer behavior for the zh web UI on phones, driven by the shell DOM owned
+ * by @zcode/ui's WorkspaceShellLayout: [data-workspace-sidebar-panel] holds
+ * the sidebar and the layout signals visibility through the opacity-100 /
+ * opacity-0 utility classes it toggles on that element. The upstream shell
+ * renders the sidebar inline, which on a phone pins the conversation to its
+ * 320px min width behind a sidebar that has no toggle button; here the
+ * sidebar becomes an off-canvas drawer above a scrim, and the top overlay
+ * (sidebar toggle + task navigation) stays above it for reachability.
+ */
+
+html.zh-mobile [data-workspace-sidebar-panel="true"] {
+  position: fixed !important;
+  inset: 0 auto 0 0;
+  width: min(84vw, 340px) !important;
+  max-width: none !important;
+  z-index: 40;
+  transform: translateX(-105%);
+  transition:
+    transform 0.2s ease-out,
+    opacity 0.2s ease-out;
+  /* Opaque on purpose: the drawer slides over the conversation. */
+  background: var(--color-background);
+  border-right: 1px solid var(--color-border);
+}
+
+html.zh-mobile [data-workspace-sidebar-panel="true"].opacity-100 {
+  transform: translateX(0);
+}
+
+/* The drag-resize separator and the conversation min width only make sense
+   while the sidebar sits inline. */
+html.zh-mobile [data-testid="resizable-handle"] {
+  display: none;
+}
+
+html.zh-mobile #content {
+  min-width: 0 !important;
+}
+
+/* Keep the top overlay (sidebar toggle, task navigation) tappable above the
+   drawer. The substring is the @container name on the DesktopTopOverlay root. */
+html.zh-mobile [class*="topoverlayer"] {
+  z-index: 50;
+}
+
+.zh-mobile-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgb(0 0 0 / 55%);
+}
+
+html:not(.zh-mobile) .zh-mobile-scrim,
+html:not(.zh-sidebar-open) .zh-mobile-scrim {
+  display: none;
+}

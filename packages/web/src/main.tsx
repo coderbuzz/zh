@@ -30,6 +30,7 @@ import {
 } from "./share/conversationShareRoute.js";
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
+import { setupMobileShell } from "./mobileShell.js";
 
 function resolveWebThemePreference(defaultTheme: Theme = WEB_DEFAULT_THEME): Theme {
   const saved = localStorage.getItem("zcode-theme");
@@ -72,6 +73,9 @@ async function resolveFeedbackUrl(): Promise<string | undefined> {
 
 const root = createRoot(document.getElementById("root")!);
 const webAuthService = createWebAuthService();
+
+// Drawer/scrim behavior for phones; a no-op on wide viewports.
+setupMobileShell();
 
 // 初始化 Web 端流式 clientId，确保所有 hook 在首次渲染前就使用稳定 ID
 {
