@@ -1,3 +1,90 @@
+# Handoff: zh web OAuth callback fix, session 2026-10-02 (build VM)
+
+Status for the production bug found 2026-10-01 ~22:11 WIB (Z.ai browser login
+in zh web mode pends forever). Read CONTEXT.md first. The previous handoff
+(zh web, session 2026-09-29, plus the pending v3.14.4 sync runbook) follows
+below, unchanged and still current.
+
+## Status: fix implemented, verified, pushed on `fix/web-oauth-callback`
+
+Work branch `fix/web-oauth-callback` (base: main @ b209d84), two commits:
+
+1. `fix: keep server-provided OAuth callback URL in zh web login` (ea6a204):
+   the fix plus the regression test.
+2. `docs: record OAuth callback fix status and VM handoff`: this section.
+
+Root cause: `startOAuthWithPolling` in
+`packages/services/src/oauth/oauthService.ts` unconditionally rewrote the
+authorize URL returned by the zcode.z.ai `cli/init` endpoint: `redirect_uri`
+(Z.AI) and `redirect` (BigModel) were set to
+`<origin>/app/oauth/login?redirect=zcode://oauth/callback&app_version=...`.
+The official CLI callback (`https://zcode.z.ai/api/v1/oauth/cli/callback/zai`)
+is the only thing that marks the server-side flow ready for polling; browsers
+cannot follow `zcode://`, so `pollPendingOAuth` never resolved.
+
+Fix: the rewrite is removed; the server-provided authorize URL passes through
+byte-identical. The desktop deep-link contract stays intact
+(`buildDesktopOAuthRedirectUriFromEnv`, the legacy non-polling `startOAuth`
+flow, `handleCallback`). No desktop-vs-web gate was added: zh ships no desktop
+client that registers `zcode://` (the web platform stub's `onOAuthCallback` is
+a no-op), and host-side polling completes regardless of what the browser lands
+on, so the deep-link path is dead code here and the unconditional default is
+the pass-through.
+
+Verified on the build VM (2026-10-02):
+
+- `bun test packages/services/test/`: 14 pass / 0 fail, including the new
+  `packages/services/test/oauthPollingAuthorizeUrl.test.ts`: Z.AI and BigModel
+  authorize URLs pass through unchanged (no `/app/oauth/login`, no
+  `zcode://`), state preserved; polling resolves to a logged-in session via a
+  stubbed init/poll backend; the legacy provider config still builds the
+  desktop relay URL (`/app/oauth/login` + `zcode://oauth/callback`).
+- `bunx oxlint` on both changed files: 0 warnings.
+- `tsc --noEmit -p packages/services/tsconfig.json`: clean.
+- `bun packages/server/scripts/build.mjs` rebuilt `dist/entry-http.js`: the
+  `searchParams.set("redirect_uri"|"redirect", ...)` rewrites are gone from
+  the bundle; the remaining `zcode://oauth/callback` (3x) and `/app/oauth/login`
+  (1x) literals are the intentional desktop deep-link contract and provider
+  config fallbacks.
+- Live check against the rebuilt bundle serving on 127.0.0.1:4190:
+  `startOAuthWithPolling("zai")` over WebSocket RPC returned the real
+  zcode.z.ai init response unchanged:
+  `redirect_uri=https://zcode.z.ai/api/v1/oauth/cli/callback/zai`, state
+  intact, nothing rewritten. Matches the hot patch verified on the deployment
+  VM the same evening.
+- Not verified (needs a real Z.ai account + browser): completing an actual
+  login end to end and watching the UI flip to logged in without reload. The
+  polling completion path itself is covered by the stubbed-poll test above.
+
+## Remaining work for the Mac session
+
+1. `sh build-all.sh` on the Mac (skipped on the VM: 964 MB RAM while the
+   production `zh-web.service` runs on the same box; a full build risks OOM).
+2. Open the PR for `fix/web-oauth-callback`, squash-merge per convention.
+3. Real-browser E2E (Mac or after deploy): run `zh web`, complete a Z.ai
+   login, confirm the polling log resolves and the UI shows logged in.
+4. Deploy: the deployment VM (`zh-web.service`, install root
+   `~/.local/share/zheadless`, v0.5.1) still runs the hand-hot-patched
+   `server/entry-http.js` (backup alongside:
+   `entry-http.js.bak-oauthcb-20261001`, confirmed to still contain the
+   rewrite). Redeploy the web asset from the released tag so the source fix
+   replaces the hot patch, then delete the backup file.
+5. If shipping immediately, bump the root version in the same round
+   (CONTEXT.md convention).
+
+## Session incident on the build VM (2026-10-01 ~23:16)
+
+The 2026-10-01 session died during cleanup: `pkill -f entry-http.js` matched
+its own shell command line (killing the turn) and also terminated the
+production `zh-web.service` process. systemd restarted production within
+about 2 minutes (later verified healthy, 401-without-token posture intact),
+but the session never recovered, likely compounded by memory pressure
+(964 MB RAM, swap in use). Rules going forward on this VM: stop services via
+`systemctl`, never `pkill -f` with a pattern that can match the running
+command, and avoid heavy builds while `zh-web.service` runs.
+
+---
+
 # Handoff: `zh web` (open thread #1), session 2026-09-29
 
 Written from the 2026-09-29 session that had to stop mid-verification (browser
