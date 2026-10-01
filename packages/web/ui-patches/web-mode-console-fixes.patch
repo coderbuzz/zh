@@ -1,0 +1,159 @@
+diff --git a/packages/ui/src/hooks/useZCodeAgentService.ts b/packages/ui/src/hooks/useZCodeAgentService.ts
+index 9e3d10a..7407656 100644
+--- a/packages/ui/src/hooks/useZCodeAgentService.ts
++++ b/packages/ui/src/hooks/useZCodeAgentService.ts
+@@ -7,8 +7,16 @@ export function useZCodeAgentService(
+   preferredRemoteSessionId?: string | null,
+   workspaceIdentity?: string | null,
+ ): IZCodeAgentService {
+-  const services = workspacePath
+-    ? useWorkspaceServices(workspacePath, preferredRemoteSessionId, workspaceIdentity)
+-    : useServices();
+-  return services.zcodeAgentService;
++  // 与 useZCodeSessionService 相同的约束：分支 hook 数量不同，
++  // workspacePath attach 时会从 undefined 变为有值，三元切换分支会
++  // 触发 React "change in the order of Hooks"。两条分支无条件执行。
++  const contextServices = useServices();
++  const workspaceServices = useWorkspaceServices(
++    workspacePath,
++    preferredRemoteSessionId,
++    workspaceIdentity,
++  );
++  return workspacePath
++    ? workspaceServices.zcodeAgentService
++    : contextServices.zcodeAgentService;
+ }
+diff --git a/packages/ui/src/hooks/useZCodeSessionService.ts b/packages/ui/src/hooks/useZCodeSessionService.ts
+index 5eb983f..331b017 100644
+--- a/packages/ui/src/hooks/useZCodeSessionService.ts
++++ b/packages/ui/src/hooks/useZCodeSessionService.ts
+@@ -7,8 +7,18 @@ export function useZCodeSessionService(
+   preferredRemoteSessionId?: string | null,
+   workspaceIdentity?: string | null,
+ ): IZCodeSessionService {
+-  const services = workspacePath
+-    ? useWorkspaceServices(workspacePath, preferredRemoteSessionId, workspaceIdentity)
+-    : useServices();
+-  return services.zcodeSessionService;
++  // 两条分支的 hook 数量不同（useWorkspaceServices 内部包含多个 context/store hook），
++  // 而 workspacePath 会在 workspace attach 过程中从 undefined 变为有值；
++  // 三元直接切换分支会触发 React "change in the order of Hooks" 并使子树崩溃
++  // （onboarding dialog 恢复会话时首次触发）。两条分支都必须无条件执行，
++  // 只在取值时按 workspacePath 选择，保持各分支原有语义不变。
++  const contextServices = useServices();
++  const workspaceServices = useWorkspaceServices(
++    workspacePath,
++    preferredRemoteSessionId,
++    workspaceIdentity,
++  );
++  return workspacePath
++    ? workspaceServices.zcodeSessionService
++    : contextServices.zcodeSessionService;
+ }
+diff --git a/packages/ui/src/hooks/useZCodeTaskService.ts b/packages/ui/src/hooks/useZCodeTaskService.ts
+index cd9438a..e73428b 100644
+--- a/packages/ui/src/hooks/useZCodeTaskService.ts
++++ b/packages/ui/src/hooks/useZCodeTaskService.ts
+@@ -294,9 +294,16 @@ export function useZCodeTaskService(
+   workspaceIdentity?: string | null,
+ ): IZCodeTaskService {
+   // ZCode task 服务按 workspace 身份解析，保证所有 task RPC 都落到对应的 host。
+-  const services = workspacePath
+-    ? useWorkspaceServices(workspacePath, preferredRemoteSessionId, workspaceIdentity)
+-    : useServices();
++  // 与 useZCodeSessionService 相同的约束：分支 hook 数量不同，workspacePath
++  // attach 时会从 undefined 变为有值，三元切换分支会触发
++  // React "change in the order of Hooks"。两条分支无条件执行。
++  const contextServices = useServices();
++  const workspaceServices = useWorkspaceServices(
++    workspacePath,
++    preferredRemoteSessionId,
++    workspaceIdentity,
++  );
++  const services = workspacePath ? workspaceServices : contextServices;
+   const rawService = services.zcodeTaskService;
+   if (!rawService || typeof rawService !== "object") {
+     return rawService;
+diff --git a/packages/ui/src/v4/windowControllerTaskListRegistry.ts b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
+index 1217819..4546b86 100644
+--- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
++++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
+@@ -64,6 +64,19 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
+   });
+ }
+ 
++// Web server 等宿主不注册 window-controller channel；RPC 侧以
++// "Unknown channel name ..." 超时拒绝订阅/查询。宿主不存在 controller
++// 时应静默回退空列表，而不是每次 mount 打 3 轮超时 RPC 并刷 error 日志。
++function isUnknownChannelError(error: unknown): boolean {
++  return error instanceof Error
++    ? error.message.includes("Unknown channel name")
++    : String(error).includes("Unknown channel name");
++}
++
++function createEmptyTaskListResult(): WindowHostControllerTaskListResult {
++  return { items: [], total: 0, hasMore: false };
++}
++
+ /** 一个 Controller proxy 对应一个共享观察器；所有列表 hook 只消费其 revision。 */
+ export function getWindowControllerTaskListRegistry(
+   controller: IWindowControllerService,
+@@ -72,6 +85,7 @@ export function getWindowControllerTaskListRegistry(
+   const existing = registries.get(key);
+   if (existing) return existing;
+ 
++  let unsupportedHost = false;
+   const listeners = new Set<() => void>();
+   const cursors = new Map<string, WindowHostControllerCursor>();
+   const subscriptionIds = new Set<string>();
+@@ -118,7 +132,7 @@ export function getWindowControllerTaskListRegistry(
+   };
+ 
+   const start = (): void => {
+-    if (started) return;
++    if (started || unsupportedHost) return;
+     started = true;
+     const startGeneration = ++generation;
+     frameDisposable = controller.onDynamicControllerFrame()((frame: WindowHostControllerFrame) => {
+@@ -198,9 +212,14 @@ export function getWindowControllerTaskListRegistry(
+         }
+         subscriptionIds.add(result.ack.subscriptionId);
+       }),
+-    ).catch((error) =>
+-      logger.warn("[windowControllerTaskListRegistry] Controller subscribe 失败", error),
+-    );
++    ).catch((error) => {
++      if (isUnknownChannelError(error)) {
++        unsupportedHost = true;
++        queryCache.clear();
++        return;
++      }
++      logger.warn("[windowControllerTaskListRegistry] Controller subscribe 失败", error);
++    });
+   };
+ 
+   const registry: WindowControllerTaskListRegistry = {
+@@ -216,10 +235,22 @@ export function getWindowControllerTaskListRegistry(
+       return revision;
+     },
+     list(queryKey, version, query) {
++      if (unsupportedHost) {
++        return Promise.resolve(createEmptyTaskListResult());
++      }
+       const versionKey = cacheVersionKey(version);
+       const cached = queryCache.get(queryKey);
+       if (cached?.versionKey === versionKey) return cached.promise;
+-      const promise = controller.listTaskList(query);
++      const promise = controller
++        .listTaskList(query)
++        .catch((error) => {
++          if (isUnknownChannelError(error)) {
++            unsupportedHost = true;
++            queryCache.clear();
++            return createEmptyTaskListResult();
++          }
++          throw error;
++        });
+       const entry = { versionKey, promise, query };
+       queryCache.set(queryKey, entry);
+       void promise.catch(() => {
