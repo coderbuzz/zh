@@ -104,8 +104,11 @@ upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 ## Upstream sync (vendor branch)
 
 zheadless tracks `zai-org/ZCode` releases directly. The fork
-`coderbuzz/zcode` is out of the update path (merged once at v3.14.3, then
-dormant; it only matters if full-monorepo work resumes).
+`coderbuzz/zcode` is archived (read-only; merged once at v3.14.3, then
+dormant — kept only as history, nothing fetches from it). The sibling
+clone at `../zcode` is a plain clone of `zai-org/ZCode` and the default
+`ZCODE_REPO` for `scripts/sync-vendor.sh`; fetch new release tags there
+from `origin`.
 
 - `vendor/upstream` is a generated branch holding verbatim copies of the
   tracked zcode files, laid out like this repo: 17 packages (11 from
