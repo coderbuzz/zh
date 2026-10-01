@@ -70,6 +70,13 @@ upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   from the official marketplace cache) are committed here. If you touch
   `.gitignore`, remember `!official-plugins/*/dist/` keeps the plugin dist
   tracked.
+- **@zcode/ui has a patch layer.** `packages/web/ui-patches/*.patch` is
+  applied by the release workflow to the monorepo checkout before the web
+  build (owner approved 2026-10-01 for the mobile sidebar fix; the older
+  branding-only scope did not need it). Keep the patches small and behavior-
+  focused; a CI conflict means upstream touched the same hunk. Runtime glue
+  that only needs shell DOM attributes (mobile drawer CSS/scrim) stays in
+  `packages/web/src/mobileShell.*` instead.
 - **Bundling playwright-core into the single-file bundle does not work**
   (runtime package assets + require.resolve; the inline build fails on
   chromium-bidi). It ships as a release asset instead, extracted by the
