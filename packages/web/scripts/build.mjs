@@ -75,6 +75,24 @@ const define = {
   "import.meta.env.DEV": "false",
   "import.meta.env.PROD": "true",
   "import.meta.env.BASE_URL": '"/"',
+  // Whole-object env for sites that alias it first (`const env = import.meta.env`)
+  // or read it through a cast (ui logger's prod gate). Without this the logger's
+  // production no-op never engages and every renderer log reaches the console.
+  "import.meta.env": JSON.stringify({
+    BASE_URL: "/",
+    DEV: false,
+    MODE: "production",
+    PROD: true,
+    SSR: false,
+    VITE_CONVERSATION_SHARE_PREVIEW_MOCK: "false",
+    VITE_ZAI_OAUTH_CLIENT_ID: zaiOAuthClientId,
+    VITE_ZAI_OAUTH_ORIGIN: zaiOAuthOrigin,
+    VITE_ZCODE_BASE_URL: zcodeEndpointOrigin,
+    VITE_ZCODE_ENDPOINT_ORIGIN: zcodeEndpointOrigin,
+  }),
+  // Vite sets this implicitly for browser builds; without it libraries that
+  // branch on it (React dev/prod entry) ship their development build.
+  "process.env.NODE_ENV": '"production"',
 };
 
 const alias = {

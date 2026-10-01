@@ -75,20 +75,35 @@ index cd9438a..e73428b 100644
    if (!rawService || typeof rawService !== "object") {
      return rawService;
 diff --git a/packages/ui/src/v4/windowControllerTaskListRegistry.ts b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-index 1217819..4546b86 100644
+index 1217819..d21c047 100644
 --- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
 +++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-@@ -64,6 +64,19 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
+@@ -64,6 +64,34 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
    });
  }
  
-+// Web server 等宿主不注册 window-controller channel；RPC 侧以
-+// "Unknown channel name ..." 超时拒绝订阅/查询。宿主不存在 controller
-+// 时应静默回退空列表，而不是每次 mount 打 3 轮超时 RPC 并刷 error 日志。
++// Web server 等宿主不注册 window-controller channel；宿主在 promise 等待超时后
++// 以 PromiseError 回包：client 侧构造的 Error 是 name="Unknown channel"、
++// message="Channel name '...' timed out after ...ms"。标记在 Error#name 上，
++// message 本身不含 "Unknown channel"，检测必须看 name（plain-object 拒绝值也兼容）。
++// 宿主不存在 controller 时应静默回退空列表，而不是每次 mount 打 3 轮超时 RPC 并刷 error 日志。
 +function isUnknownChannelError(error: unknown): boolean {
-+  return error instanceof Error
-+    ? error.message.includes("Unknown channel name")
-+    : String(error).includes("Unknown channel name");
++  const extractText = (candidate: unknown): string => {
++    if (candidate instanceof Error) {
++      return `${candidate.name} ${candidate.message}`;
++    }
++    if (typeof candidate === "string") {
++      return candidate;
++    }
++    if (candidate && typeof candidate === "object") {
++      const { name, message } = candidate as { name?: unknown; message?: unknown };
++      return `${typeof name === "string" ? name : ""} ${
++        typeof message === "string" ? message : ""
++      }`;
++    }
++    return String(candidate);
++  };
++  return /unknown channel/i.test(extractText(error));
 +}
 +
 +function createEmptyTaskListResult(): WindowHostControllerTaskListResult {
@@ -98,7 +113,7 @@ index 1217819..4546b86 100644
  /** 一个 Controller proxy 对应一个共享观察器；所有列表 hook 只消费其 revision。 */
  export function getWindowControllerTaskListRegistry(
    controller: IWindowControllerService,
-@@ -72,6 +85,7 @@ export function getWindowControllerTaskListRegistry(
+@@ -72,6 +100,7 @@ export function getWindowControllerTaskListRegistry(
    const existing = registries.get(key);
    if (existing) return existing;
  
@@ -106,7 +121,7 @@ index 1217819..4546b86 100644
    const listeners = new Set<() => void>();
    const cursors = new Map<string, WindowHostControllerCursor>();
    const subscriptionIds = new Set<string>();
-@@ -118,7 +132,7 @@ export function getWindowControllerTaskListRegistry(
+@@ -118,7 +147,7 @@ export function getWindowControllerTaskListRegistry(
    };
  
    const start = (): void => {
@@ -115,7 +130,7 @@ index 1217819..4546b86 100644
      started = true;
      const startGeneration = ++generation;
      frameDisposable = controller.onDynamicControllerFrame()((frame: WindowHostControllerFrame) => {
-@@ -198,9 +212,14 @@ export function getWindowControllerTaskListRegistry(
+@@ -198,9 +227,14 @@ export function getWindowControllerTaskListRegistry(
          }
          subscriptionIds.add(result.ack.subscriptionId);
        }),
@@ -133,7 +148,7 @@ index 1217819..4546b86 100644
    };
  
    const registry: WindowControllerTaskListRegistry = {
-@@ -216,10 +235,22 @@ export function getWindowControllerTaskListRegistry(
+@@ -216,10 +250,22 @@ export function getWindowControllerTaskListRegistry(
        return revision;
      },
      list(queryKey, version, query) {
