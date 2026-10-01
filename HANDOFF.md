@@ -1,11 +1,52 @@
-# Handoff: zh web OAuth callback fix, session 2026-10-02 (build VM)
+# Handoff: zh web OAuth callback fix, session 2026-10-02 (build VM + Mac)
 
 Status for the production bug found 2026-10-01 ~22:11 WIB (Z.ai browser login
 in zh web mode pends forever). Read CONTEXT.md first. The previous handoff
 (zh web, session 2026-09-29, plus the pending v3.14.4 sync runbook) follows
 below, unchanged and still current.
 
-## Status: fix implemented, verified, pushed on `fix/web-oauth-callback`
+## Status update, Mac session 2026-10-02: merged, released as v0.5.2, deployed
+
+Everything is done except the real-account login step (needs the owner's
+Z.ai credentials in a browser):
+
+- Merged: PR #34 squash-merged to main as f7cc6c49
+  (`fix: keep server-provided OAuth callback URL in zh web login (#34)`);
+  branch deleted.
+- Mac build: `sh build-all.sh` with every `ZCODE_*` desktop var stripped
+  (14 leaked vars found and unset) — all packages OK. `bun test
+  packages/services/test/`: 14 pass / 0 fail, including the 4 tests in
+  `oauthPollingAuthorizeUrl.test.ts`.
+- Release: PR #35 bumped the root version to 0.5.2; tag `v0.5.2` pushed at
+  b52b88b8; release workflow completed and published all assets, including
+  `zheadless-web-v0.5.2.tar.gz` (SHA256SUMS-verified before deploy).
+- Deploy: the deployment VM is `indra@34.168.150.46` (host
+  instance-20260813-081715); `zh-web.service` is a USER service
+  (`systemctl --user`), port 8787, install root `~/.local/share/zheadless`.
+  Redeployed by stopping the service, replacing `web/` + `server/` from the
+  released web asset, and restarting. Verified: service active; `/` 200;
+  `/api` and `/ws` 401 without token; token via `?token=` passes the gate
+  (Bearer header is not how the server validates — see `hasValidLiteToken` in
+  `packages/server/src/http.ts`). The deployed `entry-http.js` has 0 hits for
+  the `redirect_uri`/`redirect` rewrites and keeps the intentional
+  `zcode://oauth/callback` (3x) + `/app/oauth/login` (1x) deep-link
+  literals. `entry-http.js.bak-oauthcb-20261001` is deleted (went with the
+  replaced `server/` dir). Note: the unit Description still says v0.5.1
+  (cosmetic), and the VM's agent bundle `dist/zcode.cjs` is still v0.5.1 —
+  harmless for this fix, which lives in the server bundle.
+- Real-browser E2E on the Mac (isolated: `ZCODE_DATA_BASE_DIR=/tmp/zh-e2e-oauth`,
+  `bin/zh web --host 127.0.0.1 --port 4193 --no-open`): clicking Connect to
+  Z.ai starts polling and the browser tab opens
+  `https://chat.z.ai/auth?...redirect_uri=https%3A%2F%2Fzcode.z.ai%2Fapi%2Fv1%2Foauth%2Fcli%2Fcallback%2Fzai&state=...`
+  — the official callback, nothing rewritten, state intact. This is the first
+  live-browser proof of the pass-through. Remaining: log in with the real
+  Z.ai account in that tab and watch the poll resolve + the UI flip to logged
+  in. The flow window is ~5 minutes (`expiresInMs: 300000`); if it expires,
+  cancel and click Connect again. The E2E server was left running on port
+  4193 with the isolated data dir; kill it when done (it is the
+  `bin/zh web` process, not a service).
+
+## Status (from the build VM session): fix implemented, verified, pushed on `fix/web-oauth-callback`
 
 Work branch `fix/web-oauth-callback` (base: main @ b209d84), two commits:
 
@@ -56,21 +97,14 @@ Verified on the build VM (2026-10-02):
   login end to end and watching the UI flip to logged in without reload. The
   polling completion path itself is covered by the stubbed-poll test above.
 
-## Remaining work for the Mac session
+## Remaining work for the Mac session (all done 2026-10-02, see status update above)
 
-1. `sh build-all.sh` on the Mac (skipped on the VM: 964 MB RAM while the
-   production `zh-web.service` runs on the same box; a full build risks OOM).
-2. Open the PR for `fix/web-oauth-callback`, squash-merge per convention.
-3. Real-browser E2E (Mac or after deploy): run `zh web`, complete a Z.ai
-   login, confirm the polling log resolves and the UI shows logged in.
-4. Deploy: the deployment VM (`zh-web.service`, install root
-   `~/.local/share/zheadless`, v0.5.1) still runs the hand-hot-patched
-   `server/entry-http.js` (backup alongside:
-   `entry-http.js.bak-oauthcb-20261001`, confirmed to still contain the
-   rewrite). Redeploy the web asset from the released tag so the source fix
-   replaces the hot patch, then delete the backup file.
-5. If shipping immediately, bump the root version in the same round
-   (CONTEXT.md convention).
+1. ~~`sh build-all.sh` on the Mac~~ done.
+2. ~~Open the PR for `fix/web-oauth-callback`, squash-merge~~ done (PR #34).
+3. Real-browser E2E: partially done — the authorize URL pass-through is
+   proven in a live browser; the actual login still needs the owner.
+4. ~~Deploy + delete `entry-http.js.bak-oauthcb-20261001`~~ done.
+5. ~~Bump the root version~~ done (v0.5.2, PR #35).
 
 ## Session incident on the build VM (2026-10-01 ~23:16)
 
