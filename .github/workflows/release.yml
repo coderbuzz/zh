@@ -40,13 +40,17 @@ jobs:
         run: rsync -a --delete "$GITHUB_WORKSPACE/packages/web/" "$GITHUB_WORKSPACE/zcode/packages/web/"
 
       # Focused @zcode/ui behavior fixes that cannot live in packages/web
-      # (mobile sidebar toggle + drawer entry points). A conflict here means
-      # upstream touched the same lines; rework the patch against the new rev.
+      # (mobile sidebar toggle + drawer entry points, web-mode console fixes).
+      # A conflict here means upstream touched the same lines; rework the patch
+      # against the new rev.
       - name: Apply zh @zcode/ui patches
         working-directory: zcode
         run: |
-          git apply --check "$GITHUB_WORKSPACE/packages/web/ui-patches/mobile-sidebar.patch"
-          git apply "$GITHUB_WORKSPACE/packages/web/ui-patches/mobile-sidebar.patch"
+          shopt -s nullglob
+          for patch in "$GITHUB_WORKSPACE"/packages/web/ui-patches/*.patch; do
+            git apply --check "$patch"
+            git apply "$patch"
+          done
 
       - name: Install monorepo dependencies
         working-directory: zcode
