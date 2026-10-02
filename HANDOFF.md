@@ -38,13 +38,20 @@ Z.ai credentials in a browser):
   `bin/zh web --host 127.0.0.1 --port 4193 --no-open`): clicking Connect to
   Z.ai starts polling and the browser tab opens
   `https://chat.z.ai/auth?...redirect_uri=https%3A%2F%2Fzcode.z.ai%2Fapi%2Fv1%2Foauth%2Fcli%2Fcallback%2Fzai&state=...`
-  — the official callback, nothing rewritten, state intact. This is the first
-  live-browser proof of the pass-through. Remaining: log in with the real
-  Z.ai account in that tab and watch the poll resolve + the UI flip to logged
-  in. The flow window is ~5 minutes (`expiresInMs: 300000`); if it expires,
-  cancel and click Connect again. The E2E server was left running on port
-  4193 with the isolated data dir; kill it when done (it is the
-  `bin/zh web` process, not a service).
+  — the official callback, nothing rewritten, state intact. COMPLETED
+  2026-10-02 ~08:26 WIB with the owner's real Z.ai account: flow started
+  08:26:31, `OAuth polling flow completed { provider: 'zai' }` logged at
+  08:26:36 (5.6 s — the old build pended forever here), credentials.json in
+  the isolated store gained the `oauth:zai` session + active provider, and
+  the UI left the welcome gate for the onboarding wizard in the same tab
+  without a manual reload. Also clean-room verified with OrbStack
+  (node:22-slim): the released `zheadless-web-v0.5.2.tar.gz` boots alone,
+  serves the UI, enforces the 401 posture, and passes the authorize URL
+  through byte-identical — the asset is self-contained. (Container note:
+  accessing a token-protected server without `?token=` shows "Web bootstrap
+  failed / WebSocket connection failed" by design; the lite token comes from
+  the query param.) The E2E server with its isolated data dir
+  (/tmp/zh-e2e-oauth) was left running on port 4193 for the owner to try.
 
 ## Status (from the build VM session): fix implemented, verified, pushed on `fix/web-oauth-callback`
 
@@ -101,8 +108,9 @@ Verified on the build VM (2026-10-02):
 
 1. ~~`sh build-all.sh` on the Mac~~ done.
 2. ~~Open the PR for `fix/web-oauth-callback`, squash-merge~~ done (PR #34).
-3. Real-browser E2E: partially done — the authorize URL pass-through is
-   proven in a live browser; the actual login still needs the owner.
+3. ~~Real-browser E2E~~ done — full login with the real account completed
+   2026-10-02 ~08:26 WIB; polling resolved in 5.6 s and the UI flipped to
+   logged in without a reload.
 4. ~~Deploy + delete `entry-http.js.bak-oauthcb-20261001`~~ done.
 5. ~~Bump the root version~~ done (v0.5.2, PR #35).
 
