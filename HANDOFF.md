@@ -1,3 +1,81 @@
+# Handoff: zh web mobile fixes (drawer, boot auto-reload, section navbar), session 2026-10-02
+
+Read CONTEXT.md first. This round audited why zh web lacks desktop-app features
+and shipped three mobile fixes in packages/web only — no new @zcode/ui patches.
+Released as v0.5.3.
+
+## Audit conclusions (do not re-litigate)
+
+- zh web is built from the newest PUBLIC upstream tag, v3.14.3
+  (`ZCODE_VENDORED_REV` = 29628c9; `zai-org/ZCode` origin HEAD and tag list
+  still stop at v3.14.3 as of 2026-10-02). The desktop app and the
+  zcode.z.ai/remote/v4 controller run v3.14.4, built 2026-09-29 from commit
+  `10bbcea5` (app.asar `build-meta.json`) which does not exist in the public
+  repo. The app.asar has no sourcemaps (the `.ts` files inside are third-party
+  node_modules); it is usable as a behavior reference only. Missing features
+  are version gaps, not zh bugs:
+  - Trust Build daily claim card = upstream `manualClaimPlan` (banner, claim
+    ticket dialog, share sheet, billing API `/api/v1/zcode-plan/billing/preview`,
+    desktop host action `claim_zcode_plan`). Zero occurrences in v3.14.3 source
+    or the zh dist. Decision: wait for the v3.14.4 vendor sync; do not port
+    from the minified bundle.
+  - Message action row (copy/like/dislike/fork/time) EXISTS in 3.14.3 but is
+    hover-only (`group-hover/assistant-turn:opacity-100`); 3.14.4 adds
+    `compactForRemoteControl` which keeps it visible in the remote surface.
+  - 3.14.4 also ships a `WebRemoteControlMobileShell` (phone home/chat pages,
+    `webRemoteControl.mobileShell.*` i18n, history back support); the interim
+    drawer glue below is meant to be dropped when the vendor sync lands.
+
+## Fixes in this release
+
+- `packages/web/src/mobileShell.ts`: the drawer closes on tapping navigating
+  sidebar entries (`[data-testid^="task-item-"]`, `conversation-new-task`,
+  `automations-open`, `plugin-store-sidebar-open`) via a capture-phase click
+  listener that dispatches the existing `zh:close-sidebar` event; taps on inner
+  row buttons (pin/archive/menu triggers) are ignored. Workspace rows
+  deliberately do NOT close: their tap expands the workspace task list, which
+  the user still needs on screen.
+- `packages/web/src/mobileShell.css`: on `(hover: none) and (pointer: coarse)`
+  the hover-revealed action rows (copy/like/fork/time under assistant turns,
+  edit under user rows) are always visible, mirroring 3.14.4's
+  compactForRemoteControl behavior on touch until the sync lands.
+- `packages/web/src/mobileShell.css`: while a section main is mounted
+  (`#automations-main-toast-anchor` or `[data-testid="plugin-store-root"]`),
+  the floating top overlay becomes a solid full-width navbar and the section
+  main gets 56px (`h-14`) padding-top. Root cause: the section breadcrumb row
+  renders only when `isDesktop` (AutomationsMainBreadcrumbFrame), and on phones
+  the shell main area is full width because the sidebar is a drawer. On the
+  chat view neither marker exists and the overlay keeps the upstream floating
+  style. CSS gotchas verified the hard way: nested `:has()` is invalid and
+  silently dropped (single-level `:has` only), and the section scopes are
+  `ScopedErrorBoundary`, not keep-alive, so they really unmount on navigation.
+- `packages/web/src/main.tsx`: a failed web bootstrap (WebSocket connect) now
+  auto-reloads after 1s within a budget of 3 reloads per 60s, tracked in
+  sessionStorage (`zh:web-bootstrap-reloads`); past the budget the error card
+  with manual Retry stays, and a successful boot clears the counter. Cause:
+  mobile browsers park background tabs and drop the WebSocket; when Chrome
+  restores the tab the boot connect races the network stack coming back up.
+
+## Verification
+
+- `bunx oxlint` clean on all three files; `tsc --noEmit --noResolve` shows no
+  errors in the added code. Repo suite `bun test packages/services/test/`:
+  14 pass / 0 fail (clean env).
+- Runtime matrix in a real browser (in-app Chrome, 390x844 viewport) against
+  the bun-built bundle: drawer closes on task row and nav entries, does not
+  close on inner row buttons / workspace row / plain areas, works repeatedly;
+  after close the mirror clears and the scrim hides. Guard: 13/13 assertions
+  including a real page reload fired by the guard itself; budget exhaustion,
+  stale-window reset, and clear-on-success all verified.
+- CSS fixture: 9/9 across section-open (navbar + offsets) and chat-view
+  (floating overlay restored) states.
+- Not yet verified on a physical phone (needs the deploy of this release):
+  park zh.coderbuzz.dev and return — it should reload itself without the error
+  card; open Automations / Plugin Marketplace — title sits below the navbar and
+  scrolling stays clear of the overlay icons.
+
+---
+
 # Handoff: zh web OAuth callback fix, session 2026-10-02 (build VM + Mac)
 
 Status for the production bug found 2026-10-01 ~22:11 WIB (Z.ai browser login
