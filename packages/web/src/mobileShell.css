@@ -44,6 +44,46 @@ html.zh-mobile [class*="topoverlayer"] {
   z-index: 50;
 }
 
+/*
+ * Section pages (Automations, Plugin Marketplace) skip the desktop breadcrumb
+ * row when isDesktop=false, so their title starts at the very top of the
+ * shell. On a phone the shell main area is full width (the sidebar is a
+ * drawer), so the floating overlay buttons sit on the title and scrolled
+ * content slides under them. While a section main is mounted, make the
+ * overlay row a solid full-width navbar and offset the main below it. The
+ * markers are the stable anchor id / test id inside each section (both
+ * unmount with their view); on the chat view neither exists, so the overlay
+ * keeps the upstream floating style.
+ */
+html.zh-mobile:has(#automations-main-toast-anchor) [class*="topoverlayer"],
+html.zh-mobile:has([data-testid="plugin-store-root"]) [class*="topoverlayer"] {
+  width: 100% !important; /* beats the inline sidebar-width style */
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-border);
+}
+
+html.zh-mobile main:has(#automations-main-toast-anchor),
+html.zh-mobile main:has([data-testid="plugin-store-root"]) {
+  /* h-14 top overlay row */
+  padding-top: 3.5rem;
+}
+
+/*
+ * Hover-revealed action rows (copy/like/fork under each finished reply, edit
+ * under user replies) are unreachable on touch: 3.14.3 only reveals them on
+ * mouse hover. Upstream 3.14.4 solves this with compactForRemoteControl
+ * (opacity-100 in the remote-control surface); mirror that behavior on touch
+ * pointers here until the vendor sync lands. The substrings are the Tailwind
+ * variants on the action row elements in the 3.14.3 bundle.
+ */
+@media (hover: none) and (pointer: coarse) {
+  [class*="group-hover/assistant-turn:opacity-100"],
+  [class*="group-hover/assistant-row:opacity-100"],
+  [class*="group-hover/user-row:opacity-100"] {
+    opacity: 1;
+  }
+}
+
 .zh-mobile-scrim {
   position: fixed;
   inset: 0;

@@ -426,6 +426,50 @@ function renderWebBootstrapError(error: unknown): void {
   );
 }
 
+// Mobile browsers park background tabs and drop the WebSocket; when Chrome
+// restores the tab the boot connect races the network stack coming back up
+// and fails, parking the user on the error card. Reload automatically within
+// a small budget instead. The budget keeps a genuinely-down server from
+// reload-looping: past it the error card (with manual Retry) stays up.
+const BOOTSTRAP_RELOAD_GUARD_KEY = "zh:web-bootstrap-reloads";
+const BOOTSTRAP_RELOAD_BUDGET = 3;
+const BOOTSTRAP_RELOAD_WINDOW_MS = 60_000;
+const BOOTSTRAP_RELOAD_DELAY_MS = 1_000;
+
+function scheduleBootstrapAutoReload(): boolean {
+  try {
+    const now = Date.now();
+    const raw = window.sessionStorage.getItem(BOOTSTRAP_RELOAD_GUARD_KEY);
+    const state = raw ? (JSON.parse(raw) as { count: number; startedAt: number }) : null;
+    const active =
+      state && now - state.startedAt <= BOOTSTRAP_RELOAD_WINDOW_MS ? state : null;
+    const count = active?.count ?? 0;
+    if (count >= BOOTSTRAP_RELOAD_BUDGET) {
+      return false;
+    }
+    window.sessionStorage.setItem(
+      BOOTSTRAP_RELOAD_GUARD_KEY,
+      JSON.stringify({ count: count + 1, startedAt: active?.startedAt ?? now }),
+    );
+  } catch {
+    // Without sessionStorage the budget cannot persist across the reload, so
+    // a down server would loop forever; show the error card instead.
+    return false;
+  }
+  window.setTimeout(() => {
+    window.location.reload();
+  }, BOOTSTRAP_RELOAD_DELAY_MS);
+  return true;
+}
+
+function clearBootstrapReloadGuard(): void {
+  try {
+    window.sessionStorage.removeItem(BOOTSTRAP_RELOAD_GUARD_KEY);
+  } catch {
+    // Nothing to clear if storage is unavailable.
+  }
+}
+
 async function bootstrapWebApp() {
   const params = new URLSearchParams(window.location.search);
   if (isWebOAuthCallback(params)) {
@@ -450,6 +494,7 @@ async function bootstrapWebApp() {
     const services = await connectViaWebSocket(bootstrap.wsUrl, {
       onClose: () => {},
     });
+    clearBootstrapReloadGuard();
     const platform = createWebPlatform();
     document.title = "zh - Web + Server";
 
@@ -475,6 +520,9 @@ async function bootstrapWebApp() {
       </AppErrorBoundary>,
     );
   } catch (error) {
+    if (scheduleBootstrapAutoReload()) {
+      return;
+    }
     renderWebBootstrapError(error);
   }
 }
