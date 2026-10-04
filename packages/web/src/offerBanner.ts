@@ -83,6 +83,7 @@ interface AliyunCaptchaInitOptions {
 declare global {
   interface Window {
     initAliyunCaptcha?: (options: AliyunCaptchaInitOptions) => AliyunCaptchaInstance;
+    AliyunCaptchaConfig?: { region: string; prefix: string };
   }
 }
 
@@ -91,12 +92,17 @@ let aliyunCaptchaScriptPromise: Promise<void> | null = null;
 // tracked so closing or reopening the dialog destroys the old binding.
 let activeCaptchaInstance: AliyunCaptchaInstance | null = null;
 
-function loadAliyunCaptchaScript(): Promise<void> {
+function loadAliyunCaptchaScript(config: { region: string; prefix: string }): Promise<void> {
   aliyunCaptchaScriptPromise ??= new Promise((resolvePromise, rejectPromise) => {
     if (typeof window.initAliyunCaptcha === "function") {
       resolvePromise();
       return;
     }
+    // AliyunCaptcha.js reads its regional endpoint from this global at load
+    // time (the desktop app sets it the same way before injecting the
+    // script); a param issued against the wrong region never passes the
+    // server-side verification.
+    window.AliyunCaptchaConfig = { region: config.region, prefix: config.prefix };
     const script = document.createElement("script");
     script.src = ALIYUN_CAPTCHA_SCRIPT_URL;
     script.async = true;
@@ -122,7 +128,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!response.ok) {
-    throw new Error(`${url} responded ${response.status}`);
+    // Error bodies carry the server-side reason ({error}: the provider's
+    // message); showing it beats a bare "responded 502".
+    let reason: string | null = null;
+    try {
+      const body = (await response.json()) as { error?: unknown };
+      reason = typeof body.error === "string" ? body.error : null;
+    } catch {
+      // Non-JSON error body; fall through to the status-only message.
+    }
+    throw new Error(reason || `${url} responded ${response.status}`);
   }
   return (await response.json()) as T;
 }
@@ -396,7 +411,7 @@ async function prepareClaimCaptcha(
       return "unusable";
     }
     try {
-      await loadAliyunCaptchaScript();
+      await loadAliyunCaptchaScript(captchaConfig);
     } catch (error) {
       console.warn("[zh-offer] captcha script failed to load", error);
       return "failed";
