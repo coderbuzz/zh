@@ -56,6 +56,15 @@ const ALIYUN_CAPTCHA_SCRIPT_URL =
 // the banner cannot succeed, so the error closes the banner instead.
 const TERMINAL_CLAIM_CODES = new Set([1001, 1002, 1003, 1004, 1005]);
 const DISMISS_STORAGE_KEY = "zh:manual-claim-dismissed-plans";
+// Docking anchors from the upstream shell: the sidebar footer holds the
+// account/avatar row (data-testid="login-trigger"), and the offer card docks
+// right above it, mirroring the desktop app layout.
+const SIDEBAR_PANEL_SELECTOR = '[data-workspace-sidebar-panel="true"]';
+const SIDEBAR_FOOTER_SELECTOR = `${SIDEBAR_PANEL_SELECTOR} footer`;
+const LOGIN_TRIGGER_SELECTOR = '[data-testid="login-trigger"]';
+// Time budget for the React shell to mount the sidebar footer before the
+// banner falls back to floating (e.g. on a bootstrap error screen).
+const DOCK_WAIT_TIMEOUT_MS = 15_000;
 
 interface AliyunCaptchaInstance {
   destroy?: () => void;
@@ -221,14 +230,93 @@ function renderBanner(plan: ManualClaimPlanPreview): void {
   `;
   banner.querySelector(".zh-offer-close")?.addEventListener("click", () => {
     dismissPlan(plan.planId);
-    banner.remove();
+    closeOfferBanner();
   });
-  document.body.appendChild(banner);
+  mountOfferBanner(banner);
   banner
     .querySelector<HTMLButtonElement>("#zh-offer-claim-button")
     ?.addEventListener("click", () => {
       openClaimDialog(plan);
     });
+}
+
+/**
+ * Docks the banner into the sidebar footer, right above the account/avatar
+ * row — the same spot the desktop app uses. The React shell may not have
+ * mounted the footer yet when the preview response arrives, so the dock waits
+ * for it (re-docking if a React re-render drops the foreign node) and only
+ * falls back to the floating position when no sidebar shows up at all.
+ */
+let offerClosed = false;
+let offerDockObserver: MutationObserver | null = null;
+
+function mountOfferBanner(banner: HTMLElement): void {
+  offerClosed = false;
+  offerDockObserver?.disconnect();
+  const dock = (): boolean => {
+    const footer = Array.from(document.querySelectorAll<HTMLElement>(SIDEBAR_FOOTER_SELECTOR)).find(
+      (candidate) => candidate.querySelector(LOGIN_TRIGGER_SELECTOR),
+    );
+    if (!footer) {
+      return false;
+    }
+    banner.classList.add("zh-offer-docked");
+    // First child of the footer = directly above the avatar row.
+    footer.insertBefore(banner, footer.firstChild);
+    return true;
+  };
+  if (dock()) {
+    watchForRemoval(banner, dock);
+    return;
+  }
+  const startedAt = Date.now();
+  offerDockObserver = new MutationObserver(() => {
+    if (offerClosed) {
+      offerDockObserver?.disconnect();
+      offerDockObserver = null;
+      return;
+    }
+    if (document.getElementById("zh-offer-banner")) {
+      // Still mounted somewhere; nothing to do.
+      return;
+    }
+    if (dock()) {
+      watchForRemoval(banner, dock);
+      return;
+    }
+    if (Date.now() - startedAt > DOCK_WAIT_TIMEOUT_MS) {
+      offerDockObserver?.disconnect();
+      offerDockObserver = null;
+      // No sidebar ever appeared (error screen, share view): float instead.
+      banner.classList.remove("zh-offer-docked");
+      document.body.appendChild(banner);
+    }
+  });
+  offerDockObserver.observe(document.documentElement, { subtree: true, childList: true });
+}
+
+// React owns the sidebar footer and may re-render it; re-dock the banner if a
+// render drops the foreign node.
+function watchForRemoval(banner: HTMLElement, dock: () => boolean): void {
+  offerDockObserver?.disconnect();
+  offerDockObserver = new MutationObserver(() => {
+    if (offerClosed) {
+      offerDockObserver?.disconnect();
+      offerDockObserver = null;
+      return;
+    }
+    if (!banner.isConnected) {
+      dock();
+    }
+  });
+  offerDockObserver.observe(document.documentElement, { subtree: true, childList: true });
+}
+
+function closeOfferBanner(): void {
+  offerClosed = true;
+  offerDockObserver?.disconnect();
+  offerDockObserver = null;
+  document.getElementById("zh-offer-banner")?.remove();
 }
 
 /**
@@ -392,6 +480,7 @@ function finishClaim(
 ): void {
   if (result.success) {
     dismissPlan(plan.planId);
+    closeOfferBanner();
     activeCaptchaInstance?.destroy?.();
     activeCaptchaInstance = null;
     document.querySelector(".zh-offer-dialog")?.remove();
