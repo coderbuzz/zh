@@ -25,6 +25,17 @@
   display: none;
 }
 
+/*
+ * Docked mode: the banner lives inside the sidebar footer as the sibling
+ * right above the account/avatar row (desktop-app placement), so it flows
+ * with the footer's own flex layout instead of floating over the viewport.
+ */
+.zh-offer-banner.zh-offer-docked {
+  position: static;
+  width: auto;
+  box-shadow: none;
+}
+
 .zh-offer-brand-row {
   display: flex;
   align-items: center;
