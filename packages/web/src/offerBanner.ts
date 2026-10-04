@@ -62,9 +62,6 @@ const DISMISS_STORAGE_KEY = "zh:manual-claim-dismissed-plans";
 const SIDEBAR_PANEL_SELECTOR = '[data-workspace-sidebar-panel="true"]';
 const SIDEBAR_FOOTER_SELECTOR = `${SIDEBAR_PANEL_SELECTOR} footer`;
 const LOGIN_TRIGGER_SELECTOR = '[data-testid="login-trigger"]';
-// Time budget for the React shell to mount the sidebar footer before the
-// banner falls back to floating (e.g. on a bootstrap error screen).
-const DOCK_WAIT_TIMEOUT_MS = 15_000;
 
 interface AliyunCaptchaInstance {
   destroy?: () => void;
@@ -241,81 +238,50 @@ function renderBanner(plan: ManualClaimPlanPreview): void {
 }
 
 /**
- * Docks the banner into the sidebar footer, right above the account/avatar
- * row — the same spot the desktop app uses. The React shell may not have
- * mounted the footer yet when the preview response arrives, so the dock waits
- * for it (re-docking if a React re-render drops the foreign node) and only
- * falls back to the floating position when no sidebar shows up at all.
+ * Placement follows the shell, which mounts asynchronously (websocket boot can
+ * take a while): the banner starts floating so it is always visible, and one
+ * persistent observer moves it into the sidebar footer — right above the
+ * account/avatar row, the desktop-app placement — as soon as that footer
+ * exists. The same loop re-docks after a React re-render drops the foreign
+ * node and re-floats it if the sidebar goes away, so placement is eventually
+ * correct on every page load with no deadline.
  */
 let offerClosed = false;
-let offerDockObserver: MutationObserver | null = null;
+let offerPlacementObserver: MutationObserver | null = null;
 
 function mountOfferBanner(banner: HTMLElement): void {
   offerClosed = false;
-  offerDockObserver?.disconnect();
-  const dock = (): boolean => {
+  offerPlacementObserver?.disconnect();
+  const ensurePlacement = (): void => {
+    if (offerClosed) {
+      return;
+    }
     const footer = Array.from(document.querySelectorAll<HTMLElement>(SIDEBAR_FOOTER_SELECTOR)).find(
       (candidate) => candidate.querySelector(LOGIN_TRIGGER_SELECTOR),
     );
-    if (!footer) {
-      return false;
-    }
-    banner.classList.add("zh-offer-docked");
-    // First child of the footer = directly above the avatar row.
-    footer.insertBefore(banner, footer.firstChild);
-    return true;
-  };
-  if (dock()) {
-    watchForRemoval(banner, dock);
-    return;
-  }
-  const startedAt = Date.now();
-  offerDockObserver = new MutationObserver(() => {
-    if (offerClosed) {
-      offerDockObserver?.disconnect();
-      offerDockObserver = null;
+    const inFooter = footer ? footer.contains(banner) : false;
+    if (footer && !inFooter) {
+      banner.classList.add("zh-offer-docked");
+      // First child of the footer = directly above the avatar row.
+      footer.insertBefore(banner, footer.firstChild);
       return;
     }
-    if (document.getElementById("zh-offer-banner")) {
-      // Still mounted somewhere; nothing to do.
-      return;
-    }
-    if (dock()) {
-      watchForRemoval(banner, dock);
-      return;
-    }
-    if (Date.now() - startedAt > DOCK_WAIT_TIMEOUT_MS) {
-      offerDockObserver?.disconnect();
-      offerDockObserver = null;
-      // No sidebar ever appeared (error screen, share view): float instead.
+    if (!footer && !banner.isConnected) {
       banner.classList.remove("zh-offer-docked");
       document.body.appendChild(banner);
     }
-  });
-  offerDockObserver.observe(document.documentElement, { subtree: true, childList: true });
-}
-
-// React owns the sidebar footer and may re-render it; re-dock the banner if a
-// render drops the foreign node.
-function watchForRemoval(banner: HTMLElement, dock: () => boolean): void {
-  offerDockObserver?.disconnect();
-  offerDockObserver = new MutationObserver(() => {
-    if (offerClosed) {
-      offerDockObserver?.disconnect();
-      offerDockObserver = null;
-      return;
-    }
-    if (!banner.isConnected) {
-      dock();
-    }
-  });
-  offerDockObserver.observe(document.documentElement, { subtree: true, childList: true });
+  };
+  // Visible immediately, then the observer corrects the placement as the
+  // shell mounts and re-renders.
+  ensurePlacement();
+  offerPlacementObserver = new MutationObserver(ensurePlacement);
+  offerPlacementObserver.observe(document.documentElement, { subtree: true, childList: true });
 }
 
 function closeOfferBanner(): void {
   offerClosed = true;
-  offerDockObserver?.disconnect();
-  offerDockObserver = null;
+  offerPlacementObserver?.disconnect();
+  offerPlacementObserver = null;
   document.getElementById("zh-offer-banner")?.remove();
 }
 
