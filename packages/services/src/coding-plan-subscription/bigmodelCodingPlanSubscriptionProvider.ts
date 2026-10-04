@@ -88,6 +88,15 @@ const ZAI_CODING_PLAN_PAY_API_PREFIX = "/api/pay";
 const ZCODE_CLIENT_CONFIG_API_PREFIX = "/api/v1/client/configs";
 const ZCODE_MANUAL_CLAIM_PREVIEW_API_PATH = "/api/v1/zcode-plan/billing/preview";
 const ZCODE_MANUAL_CLAIM_CLAIM_API_PATH = "/api/v1/zcode-plan/billing/claim";
+/**
+ * Manual-claim eligibility is keyed on the upstream client version: the server
+ * returns empty plans (preview) and refuses claims for unknown versions, and
+ * zh's own 0.x release version is unknown to it. Identified live on
+ * 2026-10-04: query app_version 3.14.3/3.14.4 returned the Trust Build offer
+ * while 0.5.3 returned none (the header variant was proven irrelevant).
+ * Bump this alongside scripts/sync-vendor.sh when the vendor baseline moves.
+ */
+export const ZCODE_MANUAL_CLAIM_CLIENT_VERSION = "3.14.3";
 const REQUEST_TIMEOUT_MS = 15_000;
 const CLIENT_CONFIG_CACHE_TTL_MS = 60 * 60 * 1000;
 const CODING_PLAN_ZAI_OVERSEAS_PAYMENT_REQUIRED = "coding_plan_zai_overseas_payment_required";
@@ -277,7 +286,9 @@ export class BigModelCodingPlanSubscriptionProvider {
   async getManualClaimPlanPreviews(): Promise<ManualClaimPlanPreviewsResponse> {
     const token = (await this.credentialService.load(ZCODE_JWT_TOKEN_KEY))?.trim();
     const url = new URL(buildRuntimeZCodeApiUrl(process.env, ZCODE_MANUAL_CLAIM_PREVIEW_API_PATH));
-    url.searchParams.set("app_version", ZCODE_VERSION);
+    // app_version (query) adalah penentu eligibility offer, bukan header;
+    // ZCODE_VERSION milik zh tidak dikenal server offer.
+    url.searchParams.set("app_version", ZCODE_MANUAL_CLAIM_CLIENT_VERSION);
     url.searchParams.set("platform", resolveClientPlatformKey());
     const payload = await readCodingPlanApiJson<
       RemoteEnvelope<ManualClaimPlanPreviewEnvelopeData>
@@ -362,7 +373,7 @@ export class BigModelCodingPlanSubscriptionProvider {
             ? { "X-Aliyun-Captcha-Verify-Param": request.captchaVerifyParam }
             : {}),
           ...(captchaRegion ? { "X-Aliyun-Captcha-Verify-Region": captchaRegion } : {}),
-          "X-ZCode-App-Version": ZCODE_VERSION,
+          "X-ZCode-App-Version": ZCODE_MANUAL_CLAIM_CLIENT_VERSION,
           "X-Platform": resolveClientPlatformKey(),
         },
         body: JSON.stringify({ plan_id: request.planId }),

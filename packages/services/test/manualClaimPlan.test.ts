@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ApiClient, ApiRequestInit } from "@zcode/shared";
-import { BigModelCodingPlanSubscriptionProvider } from "../src/coding-plan-subscription/bigmodelCodingPlanSubscriptionProvider.js";
+import { BigModelCodingPlanSubscriptionProvider, ZCODE_MANUAL_CLAIM_CLIENT_VERSION } from "../src/coding-plan-subscription/bigmodelCodingPlanSubscriptionProvider.js";
 import type { ICredentialService } from "../src/credential/credential.js";
 
 interface Route {
@@ -124,7 +124,9 @@ test("getManualClaimPlanPreviews normalizes the snake_case envelope and appends 
   assert.equal(calls.length, 1);
   const url = new URL(calls[0]!.url);
   assert.equal(url.pathname, "/api/v1/zcode-plan/billing/preview");
-  assert.ok(url.searchParams.get("app_version"));
+  // Eligibility offer ditentukan oleh app_version query; versi rilis zh
+  // (bukan versi upstream) membuat server menyembunyikan offer.
+  assert.equal(url.searchParams.get("app_version"), ZCODE_MANUAL_CLAIM_CLIENT_VERSION);
   assert.equal(url.searchParams.get("platform"), `${process.platform}-${process.arch}`);
   const headers = new Headers(calls[0]!.init?.headers);
   assert.equal(headers.get("Authorization"), "Bearer jwt-token");
@@ -213,7 +215,7 @@ test("claimManualPlan sends plan_id, captcha headers, and parses the success env
   assert.equal(headers.get("Authorization"), "Bearer jwt-token");
   assert.equal(headers.get("X-Aliyun-Captcha-Verify-Param"), "verify-abc");
   assert.equal(headers.get("X-Aliyun-Captcha-Verify-Region"), "sgp");
-  assert.ok(headers.get("X-ZCode-App-Version"));
+  assert.equal(headers.get("X-ZCode-App-Version"), ZCODE_MANUAL_CLAIM_CLIENT_VERSION);
   assert.equal(headers.get("X-Platform"), `${process.platform}-${process.arch}`);
 });
 

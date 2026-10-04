@@ -51,9 +51,13 @@ upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   captcha gate mirrors the desktop: run the Aliyun widget whenever
   `configs.captcha` has region+prefix+sceneId, ignore
   enabled/skipModelRequest (those gate the model-request path, not claims).
-  Verified live: previews/captcha-config/claim error paths against
-  zcode.z.ai; a real claimable offer was not reproducible (already claimed
-  on the test account).
+  Offer eligibility is version-gated server-side: preview returns empty
+  plans for unknown client versions, so the manual-claim endpoints send the
+  vendored upstream client version (`ZCODE_MANUAL_CLAIM_CLIENT_VERSION`,
+  3.14.3), not zh's release version — A/B-verified live: 3.14.3/3.14.4
+  return the real Trust Build offer (zcode-v3-start-plan-trust-1004, 100M
+  GLM-5.3-Flash tokens), 0.5.3 returns none; the query param decides, the
+  `x-zcode-app-version` header does not.
 - Release pipeline: GitHub Actions on `v*` tags (`.github/workflows/
   release.yml`). Publishes bundle, 4 standalone binaries
   (linux/darwin x64+arm64, each carrying `dist/zcode.cjs` for the TUI
