@@ -17,7 +17,7 @@ can browse with a real Chromium. Install is one line:
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-Latest release: **v0.5.7** (claim free-token plan offers in web mode;
+Latest release: **v0.5.8** (claim free-token plan offers in web mode;
 web mode itself landed in v0.5.0, PR #28). License: MIT (owner's call;
 upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 

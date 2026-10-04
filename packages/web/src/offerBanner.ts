@@ -54,8 +54,14 @@ const ALIYUN_CAPTCHA_SCRIPT_URL =
   "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
 // Terminal claim failures (already claimed, offer ended, ...): retrying from
 // the banner cannot succeed, so the error closes the banner instead.
-const TERMINAL_CLAIM_CODES = new Set([1001, 1002, 1003, 1004, 1005]);
-const DISMISS_STORAGE_KEY = "zh:manual-claim-dismissed-plans";
+// 1001-1004 end the offer for this account (missing/unavailable/claimed/
+// ineligible). 1005 is quota exhaustion — the offer returns when the server
+// quota resets (failureEndsAt), so the banner must stay.
+const TERMINAL_CLAIM_CODES = new Set([1001, 1002, 1003, 1004]);
+const QUOTA_EXHAUSTED_CODE = 1005;
+// v2: v1 stored 1005 dismissals permanently, hiding the banner after a quota
+// reset; the new key drops those stale entries.
+const DISMISS_STORAGE_KEY = "zh:manual-claim-dismissed-plans-v2";
 // Docking anchors from the upstream shell: the sidebar footer holds the
 // account/avatar row (data-testid="login-trigger"), and the offer card docks
 // right above it, mirroring the desktop app layout.
@@ -477,7 +483,12 @@ function finishClaim(
       .querySelector(".zh-offer-dialog")
       ?.querySelector<HTMLElement>(".zh-offer-error") ?? null;
   if (errorRow) {
-    errorRow.textContent = claimFailureMessage(result);
+    // Quota exhaustion is temporary (resets at failureEndsAt); name it as
+    // such instead of the generic failure wording.
+    errorRow.textContent =
+      result.code === QUOTA_EXHAUSTED_CODE && isZhLocale()
+        ? "Kuota klaim hari ini sudah habis, silakan coba lagi besok."
+        : claimFailureMessage(result);
     errorRow.hidden = false;
   }
 }
