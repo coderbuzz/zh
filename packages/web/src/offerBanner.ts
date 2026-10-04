@@ -1,0 +1,432 @@
+// Manual-claim free offer banner for zh web mode, layered onto the shell DOM
+// the same way mobileShell is (no upstream React changes). On every page load
+// (browser refresh included) it asks the zh server for claimable free plans —
+// GET /api/coding-plan/manual-claim/previews, backed by the desktop app's
+// zcode-plan billing preview API — and renders a Claim banner when one exists.
+// Claiming goes through POST /api/coding-plan/manual-claim/claim; the server
+// adds the captcha/app-version/platform headers, the browser only supplies the
+// Aliyun captchaVerifyParam when the server-side captcha config asks for it.
+// Everything here is best-effort: failures log and stay silent so the banner
+// can never block the app.
+import "./offerBanner.css";
+import { isConversationSharePath } from "./share/conversationShareRoute.js";
+
+// Mirrors of the server payloads; kept local because the CI web build
+// resolves @zcode/shared from the upstream checkout, which has no
+// manual-claim types.
+interface ManualClaimPlanEntitlement {
+  showName: string;
+  grantUnits: number;
+  unitType: string;
+}
+
+interface ManualClaimPlanPreview {
+  planId: string;
+  name: string;
+  description: string;
+  entitlements: ManualClaimPlanEntitlement[];
+}
+
+interface ManualClaimPlanPreviewsResponse {
+  plans: ManualClaimPlanPreview[];
+}
+
+interface ZCodeCaptchaConfig {
+  region?: string;
+  prefix?: string;
+  sceneId?: string;
+  mode?: string;
+  enabled?: boolean;
+  skipModelRequest?: boolean;
+}
+
+interface ManualClaimPlanClaimResult {
+  success: boolean;
+  code: number;
+  message: string;
+  plan?: { name?: string; status?: string };
+}
+
+// Aliyun captcha 2.0 (script below exposes window.initAliyunCaptcha), bound to
+// the Claim button in popup mode; captchaVerifyParam comes back through
+// captchaVerifyCallback and is validated server-side during the claim POST.
+const ALIYUN_CAPTCHA_SCRIPT_URL =
+  "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js";
+// Terminal claim failures (already claimed, offer ended, ...): retrying from
+// the banner cannot succeed, so the error closes the banner instead.
+const TERMINAL_CLAIM_CODES = new Set([1001, 1002, 1003, 1004, 1005]);
+const DISMISS_STORAGE_KEY = "zh:manual-claim-dismissed-plans";
+
+interface AliyunCaptchaInstance {
+  destroy?: () => void;
+}
+
+interface AliyunCaptchaInitOptions {
+  SceneId: string;
+  prefix: string;
+  mode: string;
+  element: string;
+  button: string;
+  language?: string;
+  captchaVerifyCallback: (
+    captchaVerifyParam: string,
+  ) => Promise<{ captchaResult: boolean }>;
+  getInstance: (instance: AliyunCaptchaInstance) => void;
+}
+
+declare global {
+  interface Window {
+    initAliyunCaptcha?: (options: AliyunCaptchaInitOptions) => AliyunCaptchaInstance;
+  }
+}
+
+let aliyunCaptchaScriptPromise: Promise<void> | null = null;
+// Only one claim dialog (and therefore one SDK instance) exists at a time;
+// tracked so closing or reopening the dialog destroys the old binding.
+let activeCaptchaInstance: AliyunCaptchaInstance | null = null;
+
+function loadAliyunCaptchaScript(): Promise<void> {
+  aliyunCaptchaScriptPromise ??= new Promise((resolvePromise, rejectPromise) => {
+    if (typeof window.initAliyunCaptcha === "function") {
+      resolvePromise();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = ALIYUN_CAPTCHA_SCRIPT_URL;
+    script.async = true;
+    script.addEventListener("load", () => resolvePromise(), { once: true });
+    script.addEventListener(
+      "error",
+      () => {
+        script.remove();
+        aliyunCaptchaScriptPromise = null;
+        rejectPromise(new Error("Failed to load captcha script."));
+      },
+      { once: true },
+    );
+    document.head.appendChild(script);
+  });
+  return aliyunCaptchaScriptPromise;
+}
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+    ...init,
+  });
+  if (!response.ok) {
+    throw new Error(`${url} responded ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
+function readDismissedPlans(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(DISMISS_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+    return new Set(parsed.filter((entry): entry is string => typeof entry === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistDismissedPlans(planIds: Set<string>): void {
+  try {
+    window.localStorage.setItem(DISMISS_STORAGE_KEY, JSON.stringify([...planIds]));
+  } catch {
+    // Storage can be unavailable (private mode); dismissal just won't persist.
+  }
+}
+
+function isZhLocale(): boolean {
+  return /^zh\b/i.test(navigator.language);
+}
+
+function formatGrantUnits(value: number): string {
+  return new Intl.NumberFormat(isZhLocale() ? "zh-CN" : "en-US").format(value);
+}
+
+type UsableCaptchaConfig = ZCodeCaptchaConfig & {
+  region: string;
+  prefix: string;
+  sceneId: string;
+};
+
+// Claim captcha gate mirrors the desktop renderer's Nnn: unlike the model
+// request path (Lnn), the claim path ignores enabled/skipModelRequest and
+// runs the captcha whenever a config with region+prefix+sceneId exists. The
+// SDK resolves traceless (no UI) when the risk engine passes the request.
+function usableCaptchaConfig(config: ZCodeCaptchaConfig | null): config is UsableCaptchaConfig {
+  return Boolean(config?.region?.trim() && config.prefix?.trim() && config.sceneId?.trim());
+}
+
+export function setupOfferBanner(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  // Share landing and OAuth callback pages render instead of the app shell;
+  // the offer banner only belongs to the app itself.
+  if (isConversationSharePath(window.location.pathname)) {
+    return;
+  }
+  void refreshOfferBanner();
+}
+
+async function refreshOfferBanner(): Promise<void> {
+  let previews: ManualClaimPlanPreviewsResponse;
+  try {
+    previews = await fetchJson<ManualClaimPlanPreviewsResponse>(
+      "/api/coding-plan/manual-claim/previews",
+    );
+  } catch (error) {
+    console.info("[zh-offer] preview check skipped", error);
+    return;
+  }
+  const plan = previews.plans?.find(
+    (candidate) => candidate.planId && !readDismissedPlans().has(candidate.planId),
+  );
+  if (plan) {
+    renderBanner(plan);
+  }
+}
+
+function renderBanner(plan: ManualClaimPlanPreview): void {
+  document.getElementById("zh-offer-banner")?.remove();
+  const isZh = isZhLocale();
+  const entitlement = plan.entitlements?.[0];
+  const banner = document.createElement("aside");
+  banner.id = "zh-offer-banner";
+  banner.className = "zh-offer-banner";
+  banner.innerHTML = `
+    <div class="zh-offer-brand-row">
+      <span class="zh-offer-badge">Z</span>
+      <span class="zh-offer-title">ZCODE</span>
+      <button type="button" class="zh-offer-close" aria-label="${isZh ? "Tutup" : "Close"}">×</button>
+    </div>
+    <div class="zh-offer-tokens">
+      ${entitlement ? formatGrantUnits(entitlement.grantUnits) : ""}
+      ${entitlement ? `<span class="zh-offer-token-unit">${escapeHtml(entitlement.unitType || (isZh ? "token" : "tokens"))}</span>` : ""}
+    </div>
+    <div class="zh-offer-subtitle">${escapeHtml(entitlement?.showName || plan.description || plan.name)}</div>
+    <div class="zh-offer-actions">
+      <button type="button" class="zh-offer-claim-button" id="zh-offer-claim-button">
+        ${isZh ? "Klaim" : "Claim"}
+      </button>
+    </div>
+    <div class="zh-offer-error" hidden></div>
+  `;
+  banner.querySelector(".zh-offer-close")?.addEventListener("click", () => {
+    dismissPlan(plan.planId);
+    banner.remove();
+  });
+  document.body.appendChild(banner);
+  banner
+    .querySelector<HTMLButtonElement>("#zh-offer-claim-button")
+    ?.addEventListener("click", () => {
+      openClaimDialog(plan);
+    });
+}
+
+/**
+ * The desktop app claims from a dialog too, and the Aliyun SDK needs a stable
+ * button to bind its popup challenge to: the dialog's Claim button is that
+ * anchor, so the banner button only opens this dialog.
+ */
+function openClaimDialog(plan: ManualClaimPlanPreview): void {
+  // A previous dialog's captcha instance would hold the recycled element ids;
+  // destroy it and clear the container the way the desktop's controller
+  // reset does before a fresh init.
+  activeCaptchaInstance?.destroy?.();
+  activeCaptchaInstance = null;
+  document.querySelector(".zh-offer-dialog")?.remove();
+  const isZh = isZhLocale();
+  const entitlement = plan.entitlements?.[0];
+  const dialog = document.createElement("div");
+  dialog.className = "zh-offer-dialog";
+  dialog.innerHTML = `
+    <div class="zh-offer-dialog-card" role="dialog" aria-modal="true">
+      <div class="zh-offer-dialog-title">${escapeHtml(plan.name)}</div>
+      <div class="zh-offer-dialog-body">
+        ${entitlement ? `<strong>${formatGrantUnits(entitlement.grantUnits)}</strong> ${escapeHtml(entitlement.unitType || (isZh ? "token" : "tokens"))}<br />` : ""}
+        ${escapeHtml(plan.description || entitlement?.showName || "")}
+      </div>
+      <div class="zh-offer-error" hidden></div>
+      <div id="zh-offer-captcha-element"></div>
+      <div class="zh-offer-dialog-actions">
+        <button type="button" data-zh-offer-cancel>${isZh ? "Batal" : "Cancel"}</button>
+        <button type="button" id="zh-offer-dialog-claim-button">${isZh ? "Klaim" : "Claim"}</button>
+      </div>
+    </div>
+  `;
+  const closeDialog = () => {
+    activeCaptchaInstance?.destroy?.();
+    activeCaptchaInstance = null;
+    dialog.remove();
+  };
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) {
+      closeDialog();
+    }
+  });
+  dialog.querySelector("[data-zh-offer-cancel]")?.addEventListener("click", closeDialog);
+  document.body.appendChild(dialog);
+  const claimButton = dialog.querySelector<HTMLButtonElement>("#zh-offer-dialog-claim-button");
+  claimButton?.addEventListener("click", () => {
+    void startClaim(claimButton, closeDialog, plan);
+  });
+}
+
+async function startClaim(
+  button: HTMLButtonElement,
+  closeDialog: () => void,
+  plan: ManualClaimPlanPreview,
+): Promise<void> {
+  button.disabled = true;
+  const dialog = button.closest(".zh-offer-dialog");
+  const errorRow = dialog?.querySelector<HTMLElement>(".zh-offer-error") ?? null;
+  if (errorRow) {
+    errorRow.hidden = true;
+  }
+  let captchaConfig: ZCodeCaptchaConfig | null = null;
+  try {
+    captchaConfig = await fetchJson<ZCodeCaptchaConfig | null>("/api/coding-plan/captcha-config");
+  } catch {
+    // No captcha config means the claim cannot be verified server-side; the
+    // desktop cancels with the captcha failure message in that case too.
+  }
+
+  const finish = (result: ManualClaimPlanClaimResult) => {
+    if (result.success) {
+      dismissPlan(plan.planId);
+      closeDialog();
+      showSuccessDialog(plan, result);
+      return;
+    }
+    button.disabled = false;
+    if (TERMINAL_CLAIM_CODES.has(result.code)) {
+      dismissPlan(plan.planId);
+    }
+    if (errorRow) {
+      errorRow.textContent = claimFailureMessage(result);
+      errorRow.hidden = false;
+    }
+  };
+
+  if (!usableCaptchaConfig(captchaConfig)) {
+    if (errorRow) {
+      errorRow.textContent = isZhLocale()
+        ? "Verifikasi captcha gagal, silakan coba lagi."
+        : "Captcha verification failed. Please try again.";
+      errorRow.hidden = false;
+    }
+    button.disabled = false;
+    return;
+  }
+
+  try {
+    await loadAliyunCaptchaScript();
+  } catch (error) {
+    console.warn("[zh-offer] captcha unavailable", error);
+    if (errorRow) {
+      errorRow.textContent = isZhLocale()
+        ? "Verifikasi captcha tidak tersedia, coba lagi nanti."
+        : "Captcha verification is unavailable, try again later.";
+      errorRow.hidden = false;
+    }
+    button.disabled = false;
+    return;
+  }
+  window.initAliyunCaptcha?.({
+    SceneId: captchaConfig.sceneId.trim(),
+    prefix: captchaConfig.prefix.trim(),
+    mode: captchaConfig.mode?.trim() || "popup",
+    element: "#zh-offer-captcha-element",
+    button: "#zh-offer-dialog-claim-button",
+    language: isZhLocale() ? "cn" : "en",
+    captchaVerifyCallback: async (captchaVerifyParam) => {
+      const region = captchaConfig.region.trim();
+      const result = await postClaim(plan.planId, {
+        captchaVerifyParam,
+        ...(region ? { captchaRegion: region } : {}),
+      });
+      finish(result);
+      // false resets the widget so a failed claim can be retried.
+      return { captchaResult: result.success };
+    },
+    getInstance: (instance) => {
+      activeCaptchaInstance = instance;
+    },
+  });
+  // The SDK owns the button from here: the popup challenge re-invokes the
+  // click, and the claim happens inside captchaVerifyCallback.
+}
+
+async function postClaim(
+  planId: string,
+  extra: { captchaVerifyParam?: string; captchaRegion?: string },
+): Promise<ManualClaimPlanClaimResult> {
+  try {
+    return await fetchJson<ManualClaimPlanClaimResult>("/api/coding-plan/manual-claim/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planId, ...extra }),
+    });
+  } catch (error) {
+    return {
+      success: false,
+      code: -1,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function claimFailureMessage(result: ManualClaimPlanClaimResult): string {
+  const message = result.message?.trim();
+  if (message) {
+    return message;
+  }
+  return isZhLocale()
+    ? `Klaim gagal (kode ${result.code}), coba lagi nanti.`
+    : `Claim failed (code ${result.code}), try again later.`;
+}
+
+function showSuccessDialog(plan: ManualClaimPlanPreview, result: ManualClaimPlanClaimResult): void {
+  const isZh = isZhLocale();
+  const dialog = document.createElement("div");
+  dialog.className = "zh-offer-dialog";
+  dialog.innerHTML = `
+    <div class="zh-offer-dialog-card" role="dialog" aria-modal="true">
+      <div class="zh-offer-dialog-title">${escapeHtml(plan.name)}</div>
+      <div class="zh-offer-dialog-body">
+        ${isZh ? "Sekarang kamu punya akses ke" : "You now have access to"} <strong>${escapeHtml(plan.name)}</strong>.
+        ${result.plan?.status ? `<br />${escapeHtml(result.plan.status)}` : ""}
+      </div>
+      <div class="zh-offer-dialog-actions">
+        <button type="button" data-zh-offer-ok>${isZh ? "Siap" : "Got it"}</button>
+      </div>
+    </div>
+  `;
+  dialog.querySelector("[data-zh-offer-ok]")?.addEventListener("click", () => {
+    dialog.remove();
+  });
+  document.body.appendChild(dialog);
+}
+
+function dismissPlan(planId: string): void {
+  const dismissed = readDismissedPlans();
+  dismissed.add(planId);
+  persistDismissedPlans(dismissed);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}

@@ -24,6 +24,7 @@ import {
   ISystemService,
   ITerminalService,
   IBotsService,
+  ICodingPlanSubscriptionService,
   IProviderProvisioningTargetService,
 } from "@zcode/services";
 import {
@@ -37,6 +38,7 @@ import {
   type BotProvider,
   type ServerRemoteInfo,
   type ServerRemoteWorkspaceInfo,
+  type ManualClaimPlanClaimRequest,
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
@@ -240,6 +242,41 @@ function isTokenProtectedPath(pathname: string): boolean {
   return pathname === "/ws" || pathname.startsWith("/ws/") || pathname.startsWith("/api/");
 }
 
+type ManualClaimRequestBodyParseResult =
+  | { ok: true; body: ManualClaimPlanClaimRequest }
+  | { ok: false; error: string };
+
+/** claim body 只需三字段；不引 zod，手工收窄并丢弃未知键。 */
+function parseManualClaimRequestBody(raw: unknown): ManualClaimRequestBodyParseResult {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "expected a JSON object" };
+  }
+  const { planId, captchaVerifyParam, captchaRegion } = raw as Record<string, unknown>;
+  if (typeof planId !== "string" || !planId.trim()) {
+    return { ok: false, error: "planId must be a non-empty string" };
+  }
+  if (
+    captchaVerifyParam !== undefined &&
+    captchaVerifyParam !== null &&
+    typeof captchaVerifyParam !== "string"
+  ) {
+    return { ok: false, error: "captchaVerifyParam must be a string" };
+  }
+  if (captchaRegion !== undefined && captchaRegion !== null && typeof captchaRegion !== "string") {
+    return { ok: false, error: "captchaRegion must be a string" };
+  }
+  return {
+    ok: true,
+    body: {
+      planId,
+      ...(typeof captchaVerifyParam === "string" && captchaVerifyParam
+        ? { captchaVerifyParam }
+        : {}),
+      ...(typeof captchaRegion === "string" && captchaRegion ? { captchaRegion } : {}),
+    },
+  };
+}
+
 function isStaticFallbackAllowed(pathname: string): boolean {
   return !isTokenProtectedPath(pathname);
 }
@@ -319,6 +356,49 @@ export function createHttpServer(
 
   app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
+
+  // 免费套餐（manual claim）检查/领取：web 模式浏览器刷新时先 GET previews，
+  // 有可领取 offer 才渲染 banner；claim 结果对象原样透传（业务失败也在 200 里，code 承载错误）。
+  const codingPlanSubscriptionService = services.getOptional(ICodingPlanSubscriptionService);
+  const codingPlanUnavailable = () => c.json({ error: "Coding plan service unavailable" }, 503);
+  app.get("/api/coding-plan/manual-claim/previews", async (c) => {
+    if (!codingPlanSubscriptionService) {
+      return codingPlanUnavailable();
+    }
+    try {
+      return c.json(await codingPlanSubscriptionService.getManualClaimPlanPreviews());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 502);
+    }
+  });
+  app.get("/api/coding-plan/captcha-config", async (c) => {
+    if (!codingPlanSubscriptionService) {
+      return codingPlanUnavailable();
+    }
+    try {
+      return c.json(await codingPlanSubscriptionService.getCaptchaConfig());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 502);
+    }
+  });
+  app.post("/api/coding-plan/manual-claim/claim", async (c) => {
+    if (!codingPlanSubscriptionService) {
+      return codingPlanUnavailable();
+    }
+    const rawBody: unknown = await c.req.json().catch(() => null);
+    const parsed = parseManualClaimRequestBody(rawBody);
+    if (!parsed.ok) {
+      return c.json({ error: `Invalid request body: ${parsed.error}` }, 400);
+    }
+    try {
+      return c.json(await codingPlanSubscriptionService.claimManualPlan(parsed.body));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 502);
+    }
+  });
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header
   // 都不能再把自己提升为 trusted host。

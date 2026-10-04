@@ -1,0 +1,178 @@
+/*
+ * Floating offer banner for the zh web UI: the manual-claim free plan offer
+ * (harvested from the desktop app's billing/preview + billing/claim APIs).
+ * The banner lives outside the React tree (same layer as mobileShell), so it
+ * styles itself with the app's theme tokens and never touches upstream DOM.
+ */
+
+.zh-offer-banner {
+  position: fixed;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  width: min(360px, calc(100vw - 2rem));
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+  color: var(--color-card-foreground, var(--color-foreground));
+  padding: 0.85rem 0.95rem;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.zh-offer-banner[hidden] {
+  display: none;
+}
+
+.zh-offer-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.zh-offer-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--color-foreground);
+  color: var(--color-background);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.zh-offer-title {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.zh-offer-close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-foreground-subtle, var(--color-foreground));
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.zh-offer-close:hover {
+  background: var(--color-surface-hover);
+}
+
+.zh-offer-tokens {
+  margin-top: 0.45rem;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.zh-offer-tokens .zh-offer-token-unit {
+  font-size: 13px;
+  font-weight: 500;
+  margin-left: 0.3rem;
+  color: var(--color-foreground-subtle, var(--color-foreground));
+}
+
+.zh-offer-subtitle {
+  margin-top: 0.15rem;
+  color: var(--color-foreground-subtle, var(--color-foreground));
+}
+
+.zh-offer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
+}
+
+.zh-offer-claim-button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  border-radius: 999px;
+  padding: 0.3rem 1.1rem;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.zh-offer-claim-button:hover {
+  background: var(--color-surface-hover);
+}
+
+.zh-offer-claim-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.zh-offer-error {
+  margin-top: 0.5rem;
+  color: var(--color-destructive);
+  overflow-wrap: anywhere;
+}
+
+.zh-offer-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 55%);
+  padding: 1rem;
+}
+
+.zh-offer-dialog[hidden] {
+  display: none;
+}
+
+.zh-offer-dialog-card {
+  width: min(400px, 100%);
+  background: var(--color-card);
+  border: 1px solid var(--color-card-border);
+  border-radius: 16px;
+  padding: 1.4rem 1.3rem;
+  text-align: center;
+}
+
+.zh-offer-dialog-title {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.zh-offer-dialog-body {
+  margin-top: 0.5rem;
+  color: var(--color-foreground-subtle, var(--color-foreground));
+  overflow-wrap: anywhere;
+}
+
+.zh-offer-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.zh-offer-dialog-actions button {
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  padding: 0.45rem 1.4rem;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.zh-offer-dialog-actions button:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Container the Aliyun captcha SDK renders its popup into. */
+#zh-offer-captcha-element {
+  display: contents;
+}

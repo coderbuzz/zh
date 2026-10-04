@@ -31,6 +31,7 @@ import {
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
 import { setupMobileShell } from "./mobileShell.js";
+import { setupOfferBanner } from "./offerBanner.js";
 
 function resolveWebThemePreference(defaultTheme: Theme = WEB_DEFAULT_THEME): Theme {
   const saved = localStorage.getItem("zcode-theme");
@@ -76,6 +77,10 @@ const webAuthService = createWebAuthService();
 
 // Drawer/scrim behavior for phones; a no-op on wide viewports.
 setupMobileShell();
+
+// Manual-claim free offer check: runs on every page load (browser refresh
+// included); a no-op without a claimable offer or on share/callback pages.
+setupOfferBanner();
 
 // 初始化 Web 端流式 clientId，确保所有 hook 在首次渲染前就使用稳定 ID
 {

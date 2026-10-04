@@ -40,6 +40,20 @@ upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   dispatcher: `packages/bootstrap/src/zcode-protocol/server.ts`. Boot and
   clean shutdown verified; a worked frame-level handshake example is still
   missing (see open threads).
+- Manual-claim free offers in web mode (harvested from the desktop app's
+  newer build, not in any upstream release): the coding plan provider gains
+  `getManualClaimPlanPreviews` / `claimManualPlan` / `getCaptchaConfig`
+  (zcode-plan `billing/preview` + `billing/claim` on the runtime ZCode
+  endpoint, auth `Bearer <zcodejwttoken>` from the credential store). The
+  zh web server exposes them at `/api/coding-plan/*`; the browser shell
+  (`packages/web/src/offerBanner.ts`, same layer as mobileShell) checks
+  previews on every page load and renders the Claim banner/dialog. Claim
+  captcha gate mirrors the desktop: run the Aliyun widget whenever
+  `configs.captcha` has region+prefix+sceneId, ignore
+  enabled/skipModelRequest (those gate the model-request path, not claims).
+  Verified live: previews/captcha-config/claim error paths against
+  zcode.z.ai; a real claimable offer was not reproducible (already claimed
+  on the test account).
 - Release pipeline: GitHub Actions on `v*` tags (`.github/workflows/
   release.yml`). Publishes bundle, 4 standalone binaries
   (linux/darwin x64+arm64, each carrying `dist/zcode.cjs` for the TUI

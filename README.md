@@ -202,6 +202,16 @@ but do not drive a real backend. Branding covers the shell surfaces only
 (tab title, favicon, boot logo, and the document title strings in the web
 entry); strings inside `@zcode/ui` stay upstream.
 
+Free plan offers: when the signed-in account has a claimable free-token
+plan (the desktop app's limited-time promotions), every page load checks
+for it — `GET /api/coding-plan/manual-claim/previews` mirrors the zcode-plan
+billing preview API — and the shell renders a Claim banner. Claiming opens
+a dialog and goes through `POST /api/coding-plan/manual-claim/claim`; the
+Aliyun captcha verify param is obtained in the browser (config from
+`/api/coding-plan/captcha-config`), while the server adds the auth,
+captcha, app-version, and platform headers. With no usable captcha config
+the claim is refused client-side, matching the desktop app.
+
 ### Moving zcode state to a web server host
 
 `zh web` reads the same `~/.zcode/v2` state as the desktop app. The
