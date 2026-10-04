@@ -114,6 +114,82 @@ export interface StartPlanPreviewConfig {
   entitlements: StartPlanPreviewEntitlement[];
 }
 
+/** 免费套餐（manual claim）预览里的单个权益条目；grantUnits 单位由 unitType 描述。 */
+export interface ManualClaimPlanEntitlement {
+  entitlementId: string;
+  showName: string;
+  meter: string;
+  unitType: string;
+  capabilities: string[];
+  grantUnits: number;
+  period: string;
+  priority: number;
+  effectiveAt?: number;
+}
+
+/** /api/v1/zcode-plan/billing/preview 归一化后的单个可领取套餐。 */
+export interface ManualClaimPlanPreview {
+  planId: string;
+  name: string;
+  description: string;
+  priority: number;
+  entitlements: ManualClaimPlanEntitlement[];
+}
+
+export interface ManualClaimPlanPreviewsResponse {
+  /** 服务端时间（毫秒）；用于把 ends_at 等秒级字段换算成展示时间。 */
+  serverTime?: number;
+  plans: ManualClaimPlanPreview[];
+}
+
+export interface ManualClaimPlanClaimRequest {
+  planId: string;
+  /** Aliyun captcha 校验凭证；captcha 关闭或缺席时为空，请求头随之省略。 */
+  captchaVerifyParam?: string;
+  captchaRegion?: string;
+}
+
+/** 领取成功返回的权益只带 id/名字/生效时间，与 preview 的完整权益不同形。 */
+export interface ManualClaimPlanClaimedEntitlement {
+  entitlementId: string;
+  showName: string;
+  effectiveAt?: number;
+}
+
+export interface ManualClaimPlanClaimedPlan {
+  userPlanId: string;
+  planId: string;
+  status: string;
+  startsAt?: number;
+  endsAt?: number;
+  entitlements: ManualClaimPlanClaimedEntitlement[];
+}
+
+/**
+ * 领取结果：业务失败（code!==0）不抛错，由调用方按 code/message 呈现；
+ * 只有网络/非 JSON 响应才走异常路径。
+ */
+export interface ManualClaimPlanClaimResult {
+  success: boolean;
+  code: number;
+  message: string;
+  serverTime?: number;
+  /** 服务端在失败结果里给出的领取窗口截止（秒级时间戳）。 */
+  failureEndsAt?: number;
+  plan?: ManualClaimPlanClaimedPlan;
+}
+
+/** client/configs 下发的 Aliyun captcha 配置；缺席或 enabled=false 时跳过验证码。 */
+export interface ZCodeCaptchaConfig {
+  region?: string;
+  prefix?: string;
+  sceneId?: string;
+  mode?: string;
+  enabled?: boolean;
+  /** 服务端把 skip_model_request 归一成 skipModelRequest。 */
+  skipModelRequest?: boolean;
+}
+
 export interface ForceUpdateConfig {
   minimalVersion: string;
 }

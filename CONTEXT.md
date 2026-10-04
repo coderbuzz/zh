@@ -17,8 +17,8 @@ can browse with a real Chromium. Install is one line:
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
 ```
 
-Latest release: **v0.5.3** (zh web mobile fixes; web mode itself landed in
-v0.5.0, PR #28). License: MIT (owner's call;
+Latest release: **v0.5.4** (claim free-token plan offers in web mode; web
+mode itself landed in v0.5.0, PR #28). License: MIT (owner's call;
 upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
 
 ## Current state (verified, not aspirational)
@@ -40,6 +40,24 @@ upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   dispatcher: `packages/bootstrap/src/zcode-protocol/server.ts`. Boot and
   clean shutdown verified; a worked frame-level handshake example is still
   missing (see open threads).
+- Manual-claim free offers in web mode (harvested from the desktop app's
+  newer build, not in any upstream release): the coding plan provider gains
+  `getManualClaimPlanPreviews` / `claimManualPlan` / `getCaptchaConfig`
+  (zcode-plan `billing/preview` + `billing/claim` on the runtime ZCode
+  endpoint, auth `Bearer <zcodejwttoken>` from the credential store). The
+  zh web server exposes them at `/api/coding-plan/*`; the browser shell
+  (`packages/web/src/offerBanner.ts`, same layer as mobileShell) checks
+  previews on every page load and renders the Claim banner/dialog. Claim
+  captcha gate mirrors the desktop: run the Aliyun widget whenever
+  `configs.captcha` has region+prefix+sceneId, ignore
+  enabled/skipModelRequest (those gate the model-request path, not claims).
+  Offer eligibility is version-gated server-side: preview returns empty
+  plans for unknown client versions, so the manual-claim endpoints send the
+  vendored upstream client version (`ZCODE_MANUAL_CLAIM_CLIENT_VERSION`,
+  3.14.3), not zh's release version — A/B-verified live: 3.14.3/3.14.4
+  return the real Trust Build offer (zcode-v3-start-plan-trust-1004, 100M
+  GLM-5.3-Flash tokens), 0.5.3 returns none; the query param decides, the
+  `x-zcode-app-version` header does not.
 - Release pipeline: GitHub Actions on `v*` tags (`.github/workflows/
   release.yml`). Publishes bundle, 4 standalone binaries
   (linux/darwin x64+arm64, each carrying `dist/zcode.cjs` for the TUI
