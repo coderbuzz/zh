@@ -26,6 +26,7 @@ import {
   IBotsService,
   ICodingPlanSubscriptionService,
   IProviderProvisioningTargetService,
+  IProviderSettingsService,
 } from "@zcode/services";
 import {
   botProviders,
@@ -393,7 +394,18 @@ export function createHttpServer(
       return c.json({ error: `Invalid request body: ${parsed.error}` }, 400);
     }
     try {
-      return c.json(await codingPlanSubscriptionService.claimManualPlan(parsed.body));
+      const result = await codingPlanSubscriptionService.claimManualPlan(parsed.body);
+      if (result.success) {
+        // Mirror the desktop's post-claim step (reason 'marketing-plan-claim'):
+        // re-snapshot provider availability so the model picker reflects the
+        // newly claimed Start Plan immediately instead of waiting for the next
+        // settings visit; onDidChange reaches every connected client.
+        void services
+          .getOptional(IProviderSettingsService)
+          ?.refresh("marketing-plan-claim")
+          .catch(() => {});
+      }
+      return c.json(result);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 502);
