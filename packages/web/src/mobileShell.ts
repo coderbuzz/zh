@@ -5,9 +5,13 @@
 // cannot be reopened at all. This module layers drawer behavior onto the
 // shell DOM (styles in mobileShell.css):
 //   - html.zh-mobile (viewports < 768px) enables the drawer/scrim rules.
-//   - The sidebar panel signals visibility with the opacity-100 / opacity-0
-//     utility classes; a MutationObserver mirrors that into
-//     html.zh-sidebar-open to show the scrim.
+//   - The patched DesktopTopOverlay in @zcode/ui reports sidebar visibility
+//     through "zh:sidebar-visibility" window events (on mount and on every
+//     change); the scrim mirrors that into html.zh-sidebar-open. The panel
+//     element itself cannot be watched: the web reconnect remount replaces
+//     the whole React tree, so a DOM observer would keep watching a detached
+//     element and leave the scrim stuck on (mask over the page) or stuck off
+//     (drawer that nothing can close).
 //   - Tapping the scrim dispatches "zh:close-sidebar", which the patched
 //     DesktopTopOverlay in @zcode/ui translates into the app's own
 //     toggleSidebar action.
@@ -21,15 +25,21 @@ import "./mobileShell.css";
 const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
 const SIDEBAR_PANEL_SELECTOR = '[data-workspace-sidebar-panel="true"]';
 const CLOSE_SIDEBAR_EVENT = "zh:close-sidebar";
+const SIDEBAR_VISIBILITY_EVENT = "zh:sidebar-visibility";
 
 // Sidebar entries whose tap navigates away from the list. Task rows carry the
 // test id on the <li> itself, so taps on the row's inner action buttons
-// (pin/archive/menu) must be filtered out separately.
+// (pin/archive/menu) must be filtered out separately. The settings gear opens
+// the settings layer above the workspace while the workspace shell (drawer
+// included) stays mounted underneath — and the scrim stacks above that
+// layer — so the drawer must close with the navigation or the settings page
+// renders under the scrim mask.
 const NAVIGATING_SELECTOR = [
   '[data-testid^="task-item-"]',
   '[data-testid="conversation-new-task"]',
   '[data-testid="automations-open"]',
   '[data-testid="plugin-store-sidebar-open"]',
+  '[data-testid="task-settings-button"]',
 ].join(", ");
 const TASK_ROW_INTERACTIVE_CHILD_SELECTOR =
   "button, a, input, textarea, select, [role='menuitem'], [data-radix-popper-content-wrapper]";
@@ -82,26 +92,14 @@ export function setupMobileShell(): void {
   };
   document.addEventListener("click", handleDocumentClick, true);
 
-  const mirrorSidebarVisibility = () => {
-    const sidebarPanel = document.querySelector(SIDEBAR_PANEL_SELECTOR);
-    const isOpen = Boolean(sidebarPanel?.classList.contains("opacity-100"));
-    document.documentElement.classList.toggle("zh-sidebar-open", isOpen);
+  // The scrim follows the patched DesktopTopOverlay's reported visibility
+  // instead of watching the panel DOM: the reconnect remount replaces the
+  // panel element, so a MutationObserver would end up observing a detached
+  // node and freeze the scrim's last state.
+  const applySidebarVisibility = (visible: boolean) => {
+    document.documentElement.classList.toggle("zh-sidebar-open", visible);
   };
-
-  // The sidebar panel mounts with the React tree, so discover it from a
-  // subtree observer first, then watch only its class attribute.
-  const visibilityObserver = new MutationObserver(mirrorSidebarVisibility);
-  const mountObserver = new MutationObserver(() => {
-    const sidebarPanel = document.querySelector(SIDEBAR_PANEL_SELECTOR);
-    if (!sidebarPanel) {
-      return;
-    }
-    mountObserver.disconnect();
-    visibilityObserver.observe(sidebarPanel, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    mirrorSidebarVisibility();
+  window.addEventListener(SIDEBAR_VISIBILITY_EVENT, (event) => {
+    applySidebarVisibility((event as CustomEvent<boolean>).detail === true);
   });
-  mountObserver.observe(document.documentElement, { subtree: true, childList: true });
 }

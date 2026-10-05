@@ -1,5 +1,5 @@
 diff --git a/packages/ui/src/DesktopTopOverlay.tsx b/packages/ui/src/DesktopTopOverlay.tsx
-index a1860fa..e3318e0 100644
+index a1860fa..2acaa11 100644
 --- a/packages/ui/src/DesktopTopOverlay.tsx
 +++ b/packages/ui/src/DesktopTopOverlay.tsx
 @@ -1,4 +1,5 @@
@@ -8,7 +8,7 @@ index a1860fa..e3318e0 100644
  import { cn } from "@/components/lib/utils.js";
  import {
    ArrowLeftIcon,
-@@ -99,6 +100,19 @@ export function DesktopTopOverlay({
+@@ -99,6 +100,30 @@ export function DesktopTopOverlay({
      ? { width: "var(--workspace-sidebar-panel-width)" }
      : undefined;
  
@@ -25,10 +25,21 @@ index a1860fa..e3318e0 100644
 +    return () => window.removeEventListener("zh:close-sidebar", handleCloseSidebarRequest);
 +  }, [isSidebarVisible, onToggleSidebar]);
 +
++  // zh web: report sidebar visibility for the phone drawer scrim. The web
++  // reconnect remount replaces the whole React tree (the sidebar panel
++  // element included), so the scrim must follow this React state instead of
++  // DOM class watching, which would keep observing a detached element and
++  // leave the scrim stuck on or stuck off.
++  useEffect(() => {
++    window.dispatchEvent(
++      new CustomEvent("zh:sidebar-visibility", { detail: isSidebarVisible }),
++    );
++  }, [isSidebarVisible]);
++
    return (
      <div
        style={topOverlayWidthStyle}
-@@ -149,7 +163,10 @@ export function DesktopTopOverlay({
+@@ -149,7 +174,10 @@ export function DesktopTopOverlay({
              </DesktopTopOverlayActionButton>
            )}
  
