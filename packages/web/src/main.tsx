@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Web 入口集中编排启动、路由与 workspace shell wiring，与 Root.tsx 同样先保持入口收口，避免跨层状态拆散。 */
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AppErrorBoundary,
@@ -93,7 +94,6 @@ interface WebBootstrapResult {
   initialWorkspaceAbsPath?: string;
   initialWorkspaceIdentity?: string;
   initialTaskId?: string;
-  restoreSession?: boolean;
   allowOpenWorkspace?: boolean;
 }
 
@@ -432,49 +432,12 @@ function renderWebBootstrapError(error: unknown): void {
   );
 }
 
-// Mobile browsers park background tabs and drop the WebSocket; when Chrome
-// restores the tab the boot connect races the network stack coming back up
-// and fails, parking the user on the error card. Reload automatically within
-// a small budget instead. The budget keeps a genuinely-down server from
-// reload-looping: past it the error card (with manual Retry) stays up.
-const BOOTSTRAP_RELOAD_GUARD_KEY = "zh:web-bootstrap-reloads";
-const BOOTSTRAP_RELOAD_BUDGET = 3;
-const BOOTSTRAP_RELOAD_WINDOW_MS = 60_000;
-const BOOTSTRAP_RELOAD_DELAY_MS = 1_000;
-
-function scheduleBootstrapAutoReload(): boolean {
-  try {
-    const now = Date.now();
-    const raw = window.sessionStorage.getItem(BOOTSTRAP_RELOAD_GUARD_KEY);
-    const state = raw ? (JSON.parse(raw) as { count: number; startedAt: number }) : null;
-    const active =
-      state && now - state.startedAt <= BOOTSTRAP_RELOAD_WINDOW_MS ? state : null;
-    const count = active?.count ?? 0;
-    if (count >= BOOTSTRAP_RELOAD_BUDGET) {
-      return false;
-    }
-    window.sessionStorage.setItem(
-      BOOTSTRAP_RELOAD_GUARD_KEY,
-      JSON.stringify({ count: count + 1, startedAt: active?.startedAt ?? now }),
-    );
-  } catch {
-    // Without sessionStorage the budget cannot persist across the reload, so
-    // a down server would loop forever; show the error card instead.
-    return false;
-  }
-  window.setTimeout(() => {
-    window.location.reload();
-  }, BOOTSTRAP_RELOAD_DELAY_MS);
-  return true;
-}
-
-function clearBootstrapReloadGuard(): void {
-  try {
-    window.sessionStorage.removeItem(BOOTSTRAP_RELOAD_GUARD_KEY);
-  } catch {
-    // Nothing to clear if storage is unavailable.
-  }
-}
+// Full page reloads are reserved for the auth wall (reloadForAuthFailure). A
+// failed boot connect must not reload: on phones the tab that just came back
+// from the background is exactly the case where the boot WebSocket races the
+// still-waking network stack, so an auto reload would only stack full page
+// reloads (and discards already look like one) while the channel below is
+// perfectly capable of retrying at the WebSocket level.
 
 // Sign-in walls (an expired Cloudflare Access session answers the WebSocket
 // upgrade with a redirect instead of 101) make retrying pointless: reload so
@@ -517,6 +480,74 @@ declare global {
   }
 }
 
+// Marks this tab as having had the app open. sessionStorage survives reloads
+// and Chrome Android's tab-discard restores within the same tab, so the
+// pane-session restore can treat a restored tab like a renderer reload even
+// when the navigation entry type is "navigate" (what Chrome reports after a
+// discard and after the Cloudflare Access redirect chain). The value is the
+// marker timestamp; the restore gate in @zcode/ui accepts it while it is
+// fresh (12 h — keep in sync with ui-patches/web-soft-reload-restore.patch).
+// A genuinely new tab starts with empty sessionStorage and still opens a
+// draft. Refreshed on foreground events so a long-lived tab never ages out.
+const WEB_TAB_LIVE_KEY = "zh:web-tab-live";
+
+function markWebTabLive(): void {
+  try {
+    window.sessionStorage.setItem(WEB_TAB_LIVE_KEY, String(Date.now()));
+  } catch {
+    // Restore then falls back to navigation-type detection without the marker.
+  }
+}
+
+function WebConnectingScreen({ onRetry }: { onRetry: () => void }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 15_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const isZhLocale = /^zh\b/i.test(navigator.language);
+  return (
+    <div className="h-dvh min-h-dvh w-screen bg-background text-foreground">
+      <div className="mx-auto flex h-full w-full max-w-lg items-center px-4">
+        <section className="w-full rounded-xl border border-card-border bg-card p-5">
+          <div className="flex items-center gap-3">
+            <span className="size-2 animate-pulse rounded-full bg-primary" />
+            <h1 className="text-ui-xs font-medium">
+              {isZhLocale ? "正在连接 zh 服务器…" : "Connecting to the zh server…"}
+            </h1>
+          </div>
+          <p className="mt-2 text-ui-xs/relaxed text-foreground-subtle">
+            {isZhLocale
+              ? "连接会在 WebSocket 通道上自动重试。"
+              : "The connection keeps retrying on the WebSocket channel."}
+          </p>
+          {slow ? (
+            <>
+              <p className="mt-1 text-ui-xs/relaxed text-foreground-subtle">
+                {isZhLocale
+                  ? "仍然失败 — zh 服务器可能暂时不可用。"
+                  : "Still failing — the zh server may be down."}
+              </p>
+              <button
+                type="button"
+                className="mt-4 rounded-lg border border-border bg-surface px-3 py-2 text-ui-xs text-foreground-subtle hover:bg-surface-hover"
+                onClick={onRetry}
+              >
+                {isZhLocale ? "重试" : "Retry"}
+              </button>
+            </>
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function renderWebConnectingScreen(onRetry: () => void): void {
+  document.title = "zh - Web";
+  root.render(<WebConnectingScreen onRetry={onRetry} />);
+}
+
 async function bootstrapWebApp() {
   const params = new URLSearchParams(window.location.search);
   if (isWebOAuthCallback(params)) {
@@ -542,6 +573,7 @@ async function bootstrapWebApp() {
   // Every successful connection renders a fresh Root keyed by generation, so
   // a reconnect re-subscribes everything from the new service stack (the
   // pane-session restore brings the active conversation back).
+  markWebTabLive();
   let mountGeneration = 0;
   let firstConnectSettled = false;
   const channel = new ReconnectingWebChannel({
@@ -554,21 +586,14 @@ async function bootstrapWebApp() {
       }
       setConnectionIndicator("reconnecting");
       if (!firstConnectSettled) {
-        // Boot connect failed: keep the historical UX — a budgeted auto
-        // reload (covers a server coming back up), then the error card. The
-        // channel keeps retrying underneath; if it connects later the app
-        // renders over the error card.
-        if (!scheduleBootstrapAutoReload()) {
-          renderWebBootstrapError(
-            new Error("Cannot reach the zh server. It may be down or restarting."),
-          );
-        }
+        // Boot connect failed: keep retrying at the channel level over a
+        // neutral connecting card (manual retry = channel poke, no reload).
+        renderWebConnectingScreen(() => channel.poke());
       }
     },
     onConnected: (services) => {
       const isReconnect = firstConnectSettled;
       firstConnectSettled = true;
-      clearBootstrapReloadGuard();
       const platform = createWebPlatform();
       document.title = "zh - Web + Server";
       setConnectionIndicator("hidden");
@@ -590,7 +615,15 @@ async function bootstrapWebApp() {
               initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
               initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
               initialTaskId={bootstrap.initialTaskId}
-              restoreSession={bootstrap.restoreSession}
+              // Web serves exactly one workspace (server-info workspaces[0]).
+              // The default recent-projects restore reads shared server
+              // settings, which on this VM aggregate every zh instance's
+              // history: extra workspace tabs would open at boot, and the
+              // first shell to mount consumes the one-shot pane-session
+              // restore, wiping the user's active session binding (the
+              // "returned to an empty new session" bug). Desktop keeps the
+              // default; web opts out.
+              restoreSession={false}
               allowOpenWorkspace={bootstrap.allowOpenWorkspace}
               preferDirectoryBrowser
               supportsEmbeddedBrowser={false}
@@ -621,7 +654,10 @@ async function bootstrapWebApp() {
   // waiting out the backoff: tab returns to the foreground (also the moment
   // mobile browsers unfreeze their socket), network comes back, or the page
   // is restored from the back/forward cache.
-  const pokeChannel = () => channel.poke();
+  const pokeChannel = () => {
+    markWebTabLive();
+    channel.poke();
+  };
   window.addEventListener("online", pokeChannel);
   window.addEventListener("pageshow", pokeChannel);
   document.addEventListener("visibilitychange", () => {
