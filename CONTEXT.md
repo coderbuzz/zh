@@ -57,7 +57,20 @@ upstream zcode is Apache-2.0). Repo owner: coderbuzz (Indra Gunawan).
   3.14.3), not zh's release version — A/B-verified live: 3.14.3/3.14.4
   return the real Trust Build offer (zcode-v3-start-plan-trust-1004, 100M
   GLM-5.3-Flash tokens), 0.5.3 returns none; the query param decides, the
-  `x-zcode-app-version` header does not.
+  `x-zcode-app-version` header does not. Hard-won captcha facts: the SDK
+  reads its regional endpoint from `window.AliyunCaptchaConfig`
+  {region, prefix} at script load — set it before injecting the script or
+  server-side verification never passes (PR #43); the challenge triggers
+  from clicks on the bound button, so the binding must exist before the
+  first Claim click (PR #40); the browser path always shows the
+  interactive slider while desktop goes traceless (device trust). Code
+  1005 (daily claim quota exhausted, resets at failureEndsAt) must NOT
+  dismiss the banner, and the planId rotates per quota window
+  (…-1004 → …-1005). The banner docks above the sidebar avatar row like
+  the desktop app (PR #41/#42). END-TO-END VERIFIED 2026-10-05 (v0.5.8 on
+  the deployment VM): a real claim from zh web succeeded — slider solved,
+  claim accepted, success dialog, 100M GLM-5.3-Flash active, preview
+  drained for the day.
 - Release pipeline: GitHub Actions on `v*` tags (`.github/workflows/
   release.yml`). Publishes bundle, 4 standalone binaries
   (linux/darwin x64+arm64, each carrying `dist/zcode.cjs` for the TUI
