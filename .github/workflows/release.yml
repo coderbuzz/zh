@@ -69,7 +69,7 @@ jobs:
         with:
           name: web-dist
           path: zcode/packages/web/dist
-        retention-days: 1
+          retention-days: 1
 
   packages:
     needs: build-web
@@ -181,7 +181,7 @@ jobs:
         with:
           name: release-assets
           path: out/
-        retention-days: 1
+          retention-days: 1
 
   publish:
     needs: packages
