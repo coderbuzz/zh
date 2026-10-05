@@ -190,6 +190,20 @@ non-loopback client (401 without the token, 200 and 101 with the token from
 the banner). Bound to loopback, the default, the server starts with no
 token and gates nothing.
 
+`zh web` opens a browser automatically when bound to loopback. On a headless
+host (no `DISPLAY`/`WAYLAND_DISPLAY`, or running under systemd or SSH) it
+skips the attempt and says so; `--open` forces the attempt and `--no-open`
+always disables it. A missing `xdg-open` is reported as a hint instead of
+crashing the server.
+
+The browser keeps its WebSocket to `/ws` alive with server pings and an
+app-level heartbeat, and reconnects automatically with backoff after an
+idle-proxy timeout, a network switch, or a server restart; the active
+session is restored on reconnect without a page refresh. If the WebSocket
+upgrade is rejected by an auth wall (for example an expired Cloudflare
+Access session, which answers with a redirect instead of 101), reconnecting
+stops and the page reloads so the browser can sign in again.
+
 The server runtime needs Node >= 22 on `PATH` (the node-pty native addon);
 `ZH_WEB_NODE` overrides the lookup. The web dist ships as its own release
 asset, `zheadless-web-<tag>.tar.gz`, which `install-remote.sh --web`

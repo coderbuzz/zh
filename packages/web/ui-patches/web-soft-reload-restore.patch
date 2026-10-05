@@ -1,0 +1,23 @@
+diff --git a/packages/ui/src/lib/rendererNavigation.ts b/packages/ui/src/lib/rendererNavigation.ts
+index 121ac67..098b7ac 100644
+--- a/packages/ui/src/lib/rendererNavigation.ts
++++ b/packages/ui/src/lib/rendererNavigation.ts
+@@ -16,9 +16,17 @@ function readRendererNavigationEntries(): RendererNavigationEntry[] {
+ /**
+  * 区分 app 冷启动与同一 renderer 的刷新。
+  * workspace/app 入口只应展示草稿，但输出中的 renderer reload 仍要恢复当前 pane 续流。
++ * zh web: a websocket reconnect re-renders Root inside the same document, so
++ * no reload navigation entry exists. The web shell sets
++ * globalThis.__zhWebReconnectRestore right before that re-render so the
++ * pane-session restore follows the same path as a renderer reload (reselect
++ * the active session instead of dropping the user on a fresh draft).
+  */
+ export function isRendererReloadNavigation(
+   entries: readonly RendererNavigationEntry[] = readRendererNavigationEntries(),
+ ): boolean {
+-  return entries[0]?.type === "reload";
++  if (entries[0]?.type === "reload") {
++    return true;
++  }
++  return (globalThis as { __zhWebReconnectRestore?: boolean }).__zhWebReconnectRestore === true;
+ }
