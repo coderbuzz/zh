@@ -1,0 +1,47 @@
+diff --git a/packages/ui/src/lib/mobileTextInput.ts b/packages/ui/src/lib/mobileTextInput.ts
+index 4f58bd2..e1a0e01 100644
+--- a/packages/ui/src/lib/mobileTextInput.ts
++++ b/packages/ui/src/lib/mobileTextInput.ts
+@@ -1,3 +1,17 @@
++// Enter-to-send is a keyboard-first convention. On touch-primary devices
++// (phones with soft keyboards such as Gboard) the virtual Enter inserts a
++// newline instead and sending goes through the explicit send button — there
++// is no Shift key to reach a line break with. pointer:coarse matches the
++// primary input mechanism, so a desktop with a touchscreen still resolves to
++// fine and keeps the desktop behavior.
++export function isTouchPrimaryDevice(): boolean {
++  try {
++    return window.matchMedia("(pointer: coarse)").matches;
++  } catch {
++    return false;
++  }
++}
++
+ export function resolveChatEnterShortcut({
+   enterSubmits,
+ }: {
+diff --git a/packages/ui/src/v4/ConversationComposer.tsx b/packages/ui/src/v4/ConversationComposer.tsx
+index 913ae0d..2c41ffc 100644
+--- a/packages/ui/src/v4/ConversationComposer.tsx
++++ b/packages/ui/src/v4/ConversationComposer.tsx
+@@ -105,7 +105,7 @@ import {
+   type ChatComposerAttachment,
+ } from "@/lib/chatAttachments.js";
+ import { resolveChatPlaceholderKey } from "@/lib/chatPlaceholder.js";
+-import { resolveChatEnterShortcut } from "@/lib/mobileTextInput.js";
++import { isTouchPrimaryDevice, resolveChatEnterShortcut } from "@/lib/mobileTextInput.js";
+ import { appendPromptHistoryEntry } from "@/lib/promptHistory.js";
+ import {
+   persistPromptHistoryEntries,
+@@ -605,7 +605,10 @@ function ConversationComposerImpl({
+   const reportedErrorKeysRef = useRef(new Set<string>());
+   const primaryModifierPressed = usePrimaryFollowupModifier();
+   const appleKeyboardPlatform = isAppleKeyboardPlatform();
+-  const enterSubmits = true;
++  // Touch-primary devices (phones) send through the send button; the virtual
++  // keyboard's Enter must insert a newline (see mobileTextInput.ts). Desktop
++  // keeps Enter-to-send.
++  const enterSubmits = !isTouchPrimaryDevice();
+   const sendShortcut = resolveChatEnterShortcut({ enterSubmits });
+   const updateText = useCallback(
+     (next: string) => {

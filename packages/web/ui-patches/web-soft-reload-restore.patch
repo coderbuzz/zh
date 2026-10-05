@@ -1,8 +1,38 @@
 diff --git a/packages/ui/src/lib/rendererNavigation.ts b/packages/ui/src/lib/rendererNavigation.ts
-index 121ac67..098b7ac 100644
+index 121ac67..da8f892 100644
 --- a/packages/ui/src/lib/rendererNavigation.ts
 +++ b/packages/ui/src/lib/rendererNavigation.ts
-@@ -16,9 +16,17 @@ function readRendererNavigationEntries(): RendererNavigationEntry[] {
+@@ -13,12 +13,50 @@ function readRendererNavigationEntries(): RendererNavigationEntry[] {
+   }
+ }
+ 
++// zh web: the browser restores a backgrounded tab with a load whose navigation
++// entry type is "navigate" (Chrome tab discard) — not "reload" — yet the tab
++// is the same one that had the app open, so the pane-session restore must
++// still apply. The web shell stamps a timestamp into sessionStorage (which
++// survives reloads and discard restores in the same tab; a genuinely new tab
++// starts empty) on every boot and every foreground event. Accept the marker
++// while it is fresh; the 12 h bound keeps a session-restored tab reopened days
++// later on the cold-start draft path. Keep the bound in sync with
++// packages/web/src/main.tsx (WEB_TAB_LIVE_KEY).
++const WEB_TAB_LIVE_KEY = "zh:web-tab-live";
++const WEB_TAB_LIVE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
++
++function hasFreshWebTabLiveMarker(): boolean {
++  try {
++    const raw = globalThis.sessionStorage?.getItem(WEB_TAB_LIVE_KEY);
++    if (!raw) {
++      return false;
++    }
++    const stampedAt = Number(raw);
++    return (
++      Number.isFinite(stampedAt) && stampedAt > 0 && Date.now() - stampedAt <= WEB_TAB_LIVE_MAX_AGE_MS
++    );
++  } catch {
++    return false;
++  }
++}
++
  /**
   * 区分 app 冷启动与同一 renderer 的刷新。
   * workspace/app 入口只应展示草稿，但输出中的 renderer reload 仍要恢复当前 pane 续流。
@@ -19,5 +49,8 @@ index 121ac67..098b7ac 100644
 +  if (entries[0]?.type === "reload") {
 +    return true;
 +  }
-+  return (globalThis as { __zhWebReconnectRestore?: boolean }).__zhWebReconnectRestore === true;
++  if ((globalThis as { __zhWebReconnectRestore?: boolean }).__zhWebReconnectRestore === true) {
++    return true;
++  }
++  return hasFreshWebTabLiveMarker();
  }
