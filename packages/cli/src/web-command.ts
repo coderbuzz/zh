@@ -176,12 +176,41 @@ function networkUrls(port: number, token: string): string[] {
   return urls;
 }
 
+/**
+ * Environments where auto-opening a browser cannot work: no display to open
+ * it on (headless server, systemd service, SSH session). `zh web` used to
+ * crash here — the xdg-open spawn error became an unhandled 'error' event.
+ */
+function headlessEnvironmentReason(): string | undefined {
+  if (process.env.SYSTEMD_EXEC_PID || process.env.INVOCATION_ID) {
+    return "running under systemd";
+  }
+  if (process.env.SSH_CONNECTION) {
+    return "running over SSH";
+  }
+  if (process.platform === "linux" || process.platform === "freebsd" || process.platform === "openbsd") {
+    if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
+      return "no DISPLAY/WAYLAND_DISPLAY";
+    }
+  }
+  return undefined;
+}
+
 function openBrowser(url: string): void {
   const platform = process.platform;
   const command = platform === "darwin" ? "open" : platform === "win32" ? "cmd" : "xdg-open";
   const args = platform === "win32" ? ["/c", "start", "", url] : [url];
   try {
     const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    // spawn() failures (e.g. ENOENT when xdg-open is not installed) surface
+    // asynchronously as an 'error' event; without this listener it is
+    // unhandled and kills the whole zh web process.
+    child.on("error", (error) => {
+      process.stderr.write(
+        `zh web could not open a browser (${error.message}).\n` +
+          "Open the printed URL manually, or start with --no-open.\n",
+      );
+    });
     child.unref();
   } catch {
     // best effort only; the URL is printed either way
@@ -260,9 +289,16 @@ export const runWebCommand = async (
   ctx.stdout.write("Press Ctrl+C to stop.\n");
   ctx.stdout.write("\n");
 
-  const open = values.open ?? (!values["no-open"] && isLoopbackHost(host));
-  if (open) {
-    setTimeout(() => openBrowser(localUrl), 500);
+  const openRequested = values.open ?? (!values["no-open"] && isLoopbackHost(host));
+  if (openRequested) {
+    const headlessReason = headlessEnvironmentReason();
+    // An explicit --open still attempts the browser even in a headless
+    // environment (the user asked); the default auto-open skips it.
+    if (values.open === true || !headlessReason) {
+      setTimeout(() => openBrowser(localUrl), 500);
+    } else {
+      ctx.stdout.write(`Not opening a browser: ${headlessReason}. Pass --open to force.\n`);
+    }
   }
 
   let shuttingDown = false;

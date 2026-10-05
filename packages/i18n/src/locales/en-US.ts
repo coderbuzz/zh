@@ -24,7 +24,7 @@ Commands:
   skills     List local skills (\`skills list\`)
   tui        Open the terminal UI
   version    Print the CLI version
-  web        Serve the browser UI (--host --port --workspace --token)
+  web        Serve the browser UI (--host --port --workspace --open --no-open --token)
 
 Options:
   -h, --help       Show help

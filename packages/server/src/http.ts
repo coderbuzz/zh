@@ -13,6 +13,7 @@ import {
   SocketProtocol,
   ChannelServer,
   LoggingChannelServer,
+  ProtocolMessageType,
   type ISocket,
 } from "@zcode/rpc";
 import {
@@ -44,6 +45,59 @@ import {
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
 
+// WebSocket heartbeat: proxies on the path to the browser (Cloudflare Tunnel
+// ~100s idle timeout, phone NATs) silently drop idle connections, and a
+// half-open TCP socket is invisible to both ends. Ping every client at a
+// period well under the proxy timeout; a client that stops answering pongs is
+// terminated so its session resources are released and the browser sees a
+// closed socket instead of a black hole.
+const WS_PING_INTERVAL_MS = 25_000;
+// Two missed pings before giving up on the client.
+const WS_PONG_GRACE_MS = 60_000;
+const wsHeartbeatClients = new Map<WebSocket, number>();
+let wsHeartbeatTimer: ReturnType<typeof setInterval> | undefined;
+
+function sweepWebSocketHeartbeat(): void {
+  const now = Date.now();
+  for (const [ws, lastPong] of wsHeartbeatClients) {
+    if (ws.readyState !== ws.OPEN) {
+      wsHeartbeatClients.delete(ws);
+      continue;
+    }
+    if (now - lastPong > WS_PONG_GRACE_MS) {
+      log("ws heartbeat: terminating unresponsive client");
+      ws.terminate();
+      wsHeartbeatClients.delete(ws);
+      continue;
+    }
+    ws.ping();
+  }
+}
+
+function attachWebSocketHeartbeat(ws: WebSocket): void {
+  wsHeartbeatClients.set(ws, Date.now());
+  ws.on("pong", () => {
+    if (wsHeartbeatClients.has(ws)) {
+      wsHeartbeatClients.set(ws, Date.now());
+    }
+  });
+  ws.on("close", () => wsHeartbeatClients.delete(ws));
+  ws.on("error", () => wsHeartbeatClients.delete(ws));
+  if (!wsHeartbeatTimer) {
+    wsHeartbeatTimer = setInterval(sweepWebSocketHeartbeat, WS_PING_INTERVAL_MS);
+    wsHeartbeatTimer.unref?.();
+  }
+}
+
+// The browser client cannot send or observe protocol-level pings, so it
+// probes liveness with a zero-payload KeepAlive frame (13-byte header, type
+// KeepAlive). Echo it back and keep it out of the RPC stream: SocketProtocol
+// would ignore the frame anyway, and the echo is what lets the client tell a
+// live socket from a half-open one within seconds.
+function isZeroPayloadKeepAliveFrame(buf: Buffer): boolean {
+  return buf.length === 13 && buf[0] === ProtocolMessageType.KeepAlive;
+}
+
 function wrapWebSocket(ws: WebSocket): ISocket {
   const onData = new Emitter<VSBuffer>();
   const onClose = new Emitter<void>();
@@ -51,6 +105,12 @@ function wrapWebSocket(ws: WebSocket): ISocket {
 
   ws.on("message", (raw: Buffer | ArrayBuffer | Buffer[]) => {
     const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+    if (isZeroPayloadKeepAliveFrame(buf)) {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(buf);
+      }
+      return;
+    }
     onData.fire(VSBuffer.wrap(new Uint8Array(buf)));
   });
   ws.on("close", () => {
@@ -91,6 +151,7 @@ function setupChannelServer(
   services: ServiceCollection,
   clientMode: "desktop-continuous" | "web-remote-replayable",
 ) {
+  attachWebSocketHeartbeat(ws);
   const socket = wrapWebSocket(ws);
   const protocol = new SocketProtocol(socket);
   const rawServer = new ChannelServer(protocol, "server");

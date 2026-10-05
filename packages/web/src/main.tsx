@@ -10,7 +10,7 @@ import {
   type Theme,
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
-import { connectViaWebSocket } from "@zcode/client";
+import { ReconnectingWebChannel } from "@zcode/client";
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
 import { WEB_ZAI_OAUTH_CONFIG, resolveWebAuthDevReturnTo } from "./auth/webZaiOAuthConfig.js";
@@ -28,6 +28,7 @@ import {
   isConversationSharePath,
   resolveConversationShareCodeFromPath,
 } from "./share/conversationShareRoute.js";
+import { setConnectionIndicator } from "./connectionIndicator.js";
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
 import { setupMobileShell } from "./mobileShell.js";
@@ -475,6 +476,47 @@ function clearBootstrapReloadGuard(): void {
   }
 }
 
+// Sign-in walls (an expired Cloudflare Access session answers the WebSocket
+// upgrade with a redirect instead of 101) make retrying pointless: reload so
+// the browser performs the login dance and lands back on the app. Budgeted
+// like the bootstrap reload so a misconfigured wall cannot loop forever.
+const AUTH_RELOAD_GUARD_KEY = "zh:ws-auth-reloads";
+const AUTH_RELOAD_BUDGET = 3;
+const AUTH_RELOAD_WINDOW_MS = 60_000;
+
+function reloadForAuthFailure(): boolean {
+  try {
+    const now = Date.now();
+    const raw = window.sessionStorage.getItem(AUTH_RELOAD_GUARD_KEY);
+    const state = raw ? (JSON.parse(raw) as { count: number; startedAt: number }) : null;
+    const active = state && now - state.startedAt <= AUTH_RELOAD_WINDOW_MS ? state : null;
+    const count = active?.count ?? 0;
+    if (count >= AUTH_RELOAD_BUDGET) {
+      return false;
+    }
+    window.sessionStorage.setItem(
+      AUTH_RELOAD_GUARD_KEY,
+      JSON.stringify({ count: count + 1, startedAt: active?.startedAt ?? now }),
+    );
+  } catch {
+    // Without sessionStorage the budget cannot persist across the reload;
+    // reloading anyway is still better than a stuck reconnect pill.
+  }
+  setConnectionIndicator("authExpired");
+  window.location.reload();
+  return true;
+}
+
+// Set right before a reconnect re-render so the patched
+// isRendererReloadNavigation (ui-patches) treats the fresh Root mount like a
+// renderer reload: the pane-session restore reselects the active session and
+// its conversation resubscribes, instead of dropping the user on a draft.
+declare global {
+  interface Window {
+    __zhWebReconnectRestore?: boolean;
+  }
+}
+
 async function bootstrapWebApp() {
   const params = new URLSearchParams(window.location.search);
   if (isWebOAuthCallback(params)) {
@@ -495,41 +537,98 @@ async function bootstrapWebApp() {
     return;
   }
 
-  try {
-    const services = await connectViaWebSocket(bootstrap.wsUrl, {
-      onClose: () => {},
-    });
-    clearBootstrapReloadGuard();
-    const platform = createWebPlatform();
-    document.title = "zh - Web + Server";
+  // The channel owns the WebSocket for the whole page lifetime: dead-socket
+  // detection, fail-fast RPC, backoff reconnect, and the auth-expired reload.
+  // Every successful connection renders a fresh Root keyed by generation, so
+  // a reconnect re-subscribes everything from the new service stack (the
+  // pane-session restore brings the active conversation back).
+  let mountGeneration = 0;
+  let firstConnectSettled = false;
+  const channel = new ReconnectingWebChannel({
+    wsUrl: bootstrap.wsUrl,
+    probeUrl: `${window.location.origin}/api/server-info`,
+    onStateChange: (state) => {
+      if (state === "connected") {
+        setConnectionIndicator("hidden");
+        return;
+      }
+      setConnectionIndicator("reconnecting");
+      if (!firstConnectSettled) {
+        // Boot connect failed: keep the historical UX — a budgeted auto
+        // reload (covers a server coming back up), then the error card. The
+        // channel keeps retrying underneath; if it connects later the app
+        // renders over the error card.
+        if (!scheduleBootstrapAutoReload()) {
+          renderWebBootstrapError(
+            new Error("Cannot reach the zh server. It may be down or restarting."),
+          );
+        }
+      }
+    },
+    onConnected: (services) => {
+      const isReconnect = firstConnectSettled;
+      firstConnectSettled = true;
+      clearBootstrapReloadGuard();
+      const platform = createWebPlatform();
+      document.title = "zh - Web + Server";
+      setConnectionIndicator("hidden");
 
-    root.render(
-      <AppErrorBoundary>
-        <ZCodeIntlProvider
-          settingService={services.settingService}
-          broadcastService={services.broadcastService}
-        >
-          <Root
-            services={services}
-            platform={platform}
-            initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
-            initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
-            initialTaskId={bootstrap.initialTaskId}
-            restoreSession={bootstrap.restoreSession}
-            allowOpenWorkspace={bootstrap.allowOpenWorkspace}
-            preferDirectoryBrowser
-            supportsEmbeddedBrowser={false}
-            allowRemoteWorkspace={false}
-          />
-        </ZCodeIntlProvider>
-      </AppErrorBoundary>,
-    );
-  } catch (error) {
-    if (scheduleBootstrapAutoReload()) {
-      return;
+      mountGeneration += 1;
+      if (isReconnect) {
+        window.__zhWebReconnectRestore = true;
+      }
+      root.render(
+        <AppErrorBoundary key={`mount-${mountGeneration}`}>
+          <ZCodeIntlProvider
+            key={`mount-${mountGeneration}`}
+            settingService={services.settingService}
+            broadcastService={services.broadcastService}
+          >
+            <Root
+              services={services}
+              platform={platform}
+              initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
+              initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
+              initialTaskId={bootstrap.initialTaskId}
+              restoreSession={bootstrap.restoreSession}
+              allowOpenWorkspace={bootstrap.allowOpenWorkspace}
+              preferDirectoryBrowser
+              supportsEmbeddedBrowser={false}
+              allowRemoteWorkspace={false}
+            />
+          </ZCodeIntlProvider>
+        </AppErrorBoundary>,
+      );
+      if (isReconnect) {
+        // The restore consumers read the flag on their first mount, which
+        // happens within this render commit; clear it so nothing later in
+        // the app's lifetime mistakes itself for a reload.
+        window.setTimeout(() => {
+          delete window.__zhWebReconnectRestore;
+        }, 5_000);
+      }
+    },
+    onAuthExpired: () => {
+      channel.dispose();
+      if (!reloadForAuthFailure()) {
+        setConnectionIndicator("authRequired");
+      }
+    },
+  });
+  channel.start();
+
+  // Wake the channel up the moment the environment changes instead of
+  // waiting out the backoff: tab returns to the foreground (also the moment
+  // mobile browsers unfreeze their socket), network comes back, or the page
+  // is restored from the back/forward cache.
+  const pokeChannel = () => channel.poke();
+  window.addEventListener("online", pokeChannel);
+  window.addEventListener("pageshow", pokeChannel);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      pokeChannel();
     }
-    renderWebBootstrapError(error);
-  }
+  });
 }
 
 void bootstrapWebApp();

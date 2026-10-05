@@ -1,0 +1,59 @@
+/*
+ * Styles for the connection-state pill injected by connectionIndicator.ts.
+ * Hand-written CSS (not Tailwind utilities): the web build's Tailwind pass
+ * only scans the upstream @zcode/ui sources, so classes used only here would
+ * not be generated.
+ */
+
+.zh-conn-pill {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  transform: translate(-50%, -16px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(250, 179, 63, 0.35);
+  background: rgba(34, 30, 24, 0.92);
+  color: #fab33f;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease-out,
+    transform 0.15s ease-out;
+  z-index: 80;
+}
+
+.zh-conn-pill.zh-conn-pill-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.zh-conn-pill.zh-conn-pill-error {
+  border-color: rgba(239, 90, 90, 0.45);
+  color: #ef5a5a;
+}
+
+.zh-conn-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: zh-conn-pill-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes zh-conn-pill-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
