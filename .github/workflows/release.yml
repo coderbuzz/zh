@@ -88,6 +88,14 @@ jobs:
         with:
           node-version: 24
 
+      # 2026-10-05 (v0.5.12 run): with setup-node@v4 forced onto the Node 24
+      # runtime, its toolcache dir intermittently failed to persist on PATH —
+      # bash still resolved node via /usr/local/bin, but npm only exists in
+      # the toolcache, so stage-tui-runtime's npm pack died with ENOENT.
+      # Re-add the resolved node bin dir explicitly for the following steps.
+      - name: Ensure node bin dir (npm) on PATH
+        run: echo "$(dirname "$(command -v node)")" >> "$GITHUB_PATH"
+
       - uses: actions/download-artifact@v4
         with:
           name: web-dist
