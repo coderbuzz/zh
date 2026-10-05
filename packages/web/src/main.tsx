@@ -14,6 +14,7 @@ import "@zcode/ui/styles.css";
 import { ReconnectingWebChannel } from "@zcode/client";
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
+import { withWorkspaceScopedSettings } from "./workspaceScopedSettings.js";
 import { WEB_ZAI_OAUTH_CONFIG, resolveWebAuthDevReturnTo } from "./auth/webZaiOAuthConfig.js";
 import { parseOAuthState, resolveSafeAppReturnTo } from "./auth/oauthStateCodec.js";
 import { resolveWebCommunityUrl, resolveWebHelpConfig } from "./communityUrl.js";
@@ -602,28 +603,33 @@ async function bootstrapWebApp() {
       if (isReconnect) {
         window.__zhWebReconnectRestore = true;
       }
+      // The web UI gets a workspace-scoped view of the shared settings file
+      // (see workspaceScopedSettings.ts): session restore only ever sees this
+      // instance's workspace tabs, with the server workspace as the active
+      // tab — so the shell that consumes the one-shot pane-session restore is
+      // always the bootstrapped one (the v0.5.10 regression), while every
+      // previously opened project still comes back after a refresh (the
+      // v0.5.11 regression, caused by disabling restore altogether).
+      const scopedServices = withWorkspaceScopedSettings(
+        services,
+        bootstrap.initialWorkspaceAbsPath,
+      );
       root.render(
         <AppErrorBoundary key={`mount-${mountGeneration}`}>
           <ZCodeIntlProvider
             key={`mount-${mountGeneration}`}
-            settingService={services.settingService}
-            broadcastService={services.broadcastService}
+            settingService={scopedServices.settingService}
+            broadcastService={scopedServices.broadcastService}
           >
             <Root
-              services={services}
+              services={scopedServices}
               platform={platform}
               initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
               initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
               initialTaskId={bootstrap.initialTaskId}
-              // Web serves exactly one workspace (server-info workspaces[0]).
-              // The default recent-projects restore reads shared server
-              // settings, which on this VM aggregate every zh instance's
-              // history: extra workspace tabs would open at boot, and the
-              // first shell to mount consumes the one-shot pane-session
-              // restore, wiping the user's active session binding (the
-              // "returned to an empty new session" bug). Desktop keeps the
-              // default; web opts out.
-              restoreSession={false}
+              // Without a bootstrapped workspace (remote/attach mode) there is
+              // no scope to restore into; keep restore off there.
+              restoreSession={Boolean(bootstrap.initialWorkspaceAbsPath)}
               allowOpenWorkspace={bootstrap.allowOpenWorkspace}
               preferDirectoryBrowser
               supportsEmbeddedBrowser={false}
