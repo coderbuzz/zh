@@ -19,7 +19,7 @@ with `--mode build|edit|plan` when the task warrants it.
 One line, no git required:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh
 ```
 
 The installer downloads the latest release, verifies its SHA256 checksums,
@@ -32,16 +32,16 @@ explicitly if you prefer:
 
 ```sh
 # auto: bundle when bun or node >= 22 is present, binary otherwise (default)
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=auto
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --method=auto
 
 # standalone executable per OS/arch, no bun or node needed
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=binary
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --method=binary
 
 # minified bundle + launcher; runs with bun, falls back to node
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=bundle
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --method=bundle
 
 # build from source on the target machine; needs bun
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=source
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --method=source
 ```
 
 What `auto` does, in order:
@@ -62,7 +62,7 @@ launcher goes to `~/.local/bin/zh` (`--prefix` to change). Re-running the
 installer repairs an existing install; remove everything with:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --uninstall
 ```
 
 From a clone of this repository, `sh install.sh` does the same as

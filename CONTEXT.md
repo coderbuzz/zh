@@ -14,7 +14,7 @@ and the agent plans, calls tools, loads skills, drives dynamic workflows, and
 can browse with a real Chromium. Install is one line:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
+curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh
 ```
 
 Latest release: **v0.5.9** (claim free-token plan offers in web mode;

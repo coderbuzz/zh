@@ -2,7 +2,7 @@
 # Remote installer for zh (headless zcode).
 #
 # One-liner:
-#   curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh
 #
 # Methods:
 #   auto    pick the smallest install that runs on this machine: bundle when a
@@ -27,7 +27,7 @@
 # at runtime (node-pty native addon) and is available for binary/bundle installs.
 set -eu
 
-REPO="coderbuzz/zheadless"
+REPO="coderbuzz/zh"
 DEFAULT_HOME="$HOME/.local/share/zheadless"
 DEFAULT_PREFIX="$HOME/.local/bin"
 

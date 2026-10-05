@@ -63,5 +63,5 @@ fi
 
 echo "zh: no usable runtime or entry point found under $ROOT." >&2
 echo "  Install bun (https://bun.sh) for source checkouts, or reinstall via:" >&2
-echo "  curl -fsSL https://raw.githubusercontent.com/coderbuzz/zheadless/main/install-remote.sh | sh -s -- --method=bundle" >&2
+echo "  curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --method=bundle" >&2
 exit 127
