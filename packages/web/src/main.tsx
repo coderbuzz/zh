@@ -15,7 +15,12 @@ import { ReconnectingWebChannel } from "@zcode/client";
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
 import { withWorkspaceScopedSettings } from "./workspaceScopedSettings.js";
-import { formatSessionHash, parseSessionHash, writeSessionHash } from "./sessionUrl.js";
+import {
+  CONVERSATION_WS,
+  formatSessionHash,
+  parseSessionHash,
+  writeSessionHash,
+} from "./sessionUrl.js";
 import { WEB_ZAI_OAUTH_CONFIG, resolveWebAuthDevReturnTo } from "./auth/webZaiOAuthConfig.js";
 import { parseOAuthState, resolveSafeAppReturnTo } from "./auth/oauthStateCodec.js";
 import { resolveWebCommunityUrl, resolveWebHelpConfig } from "./communityUrl.js";
@@ -303,11 +308,11 @@ function createWebPlatform(sessionScopePath?: string): IPlatformService {
     syncActiveTaskSession: () => {},
     // Mirror the open session into the URL hash (sessionUrl.ts) so a refresh
     // or reconnect reopens it. No tab yet = boot transient; leave the URL be.
-    syncActiveWorkspaceTask: (workspacePath, taskId) => {
+    syncActiveWorkspaceTask: (workspacePath, taskId, workspacePurpose) => {
       if (!sessionScopePath || !workspacePath) {
         return;
       }
-      const hash = formatSessionHash(sessionScopePath, workspacePath, taskId);
+      const hash = formatSessionHash(sessionScopePath, workspacePath, taskId, workspacePurpose);
       if (hash !== null) {
         writeSessionHash(hash);
       }
@@ -603,14 +608,29 @@ async function bootstrapWebApp() {
         renderWebConnectingScreen(() => channel.poke());
       }
     },
-    onConnected: (services) => {
+    onConnected: async (services) => {
       const isReconnect = firstConnectSettled;
       firstConnectSettled = true;
       const scopePath = bootstrap.initialWorkspaceAbsPath;
       const platform = createWebPlatform(scopePath);
       // Read on every mount: a reconnect reopens whatever the user has open
       // now, not what the page was first loaded with.
-      const urlTarget = scopePath ? parseSessionHash(window.location.hash, scopePath) : null;
+      // The Tasks workspace lives outside the scope; its path comes from the
+      // persisted session (the settings entry with purpose "conversation").
+      let conversationPath: string | undefined;
+      if (scopePath && window.location.hash.includes(CONVERSATION_WS)) {
+        try {
+          const saved = (await services.settingService.get()).lastWorkspaceSession ?? [];
+          conversationPath = saved.find(
+            (entry) => entry.kind === "local" && entry.workspacePurpose === "conversation",
+          )?.workspacePath;
+        } catch {
+          // Unreadable settings: fall through to the plain server workspace.
+        }
+      }
+      const urlTarget = scopePath
+        ? parseSessionHash(window.location.hash, scopePath, conversationPath)
+        : null;
       const initialWorkspaceAbsPath = urlTarget?.workspacePath ?? scopePath;
       document.title = "zh - Web + Server";
       setConnectionIndicator("hidden");
@@ -645,6 +665,9 @@ async function bootstrapWebApp() {
               initialWorkspaceAbsPath={initialWorkspaceAbsPath}
               initialWorkspaceIdentity={
                 initialWorkspaceAbsPath === scopePath ? bootstrap.initialWorkspaceIdentity : undefined
+              }
+              initialWorkspacePurpose={
+                urlTarget && urlTarget.workspacePath === conversationPath ? "conversation" : undefined
               }
               initialTaskId={urlTarget?.taskId}
               // Without a bootstrapped workspace (remote/attach mode) there is
