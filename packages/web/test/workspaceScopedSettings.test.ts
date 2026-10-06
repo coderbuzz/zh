@@ -87,6 +87,16 @@ describe("scopeSettingsForRestore", () => {
     expect(foreignActive.lastActiveTabIndex).toBe(1);
   });
 
+  test("activates the URL's workspace instead when it is a restored tab", () => {
+    const settings = baseSettings({
+      lastWorkspaceSession: [localEntry(SCOPE), localEntry(`${SCOPE}/nalar`)],
+      lastActiveTabIndex: 0,
+    });
+    expect(scopeSettingsForRestore(settings, SCOPE, `${SCOPE}/nalar`).lastActiveTabIndex).toBe(1);
+    // Not restored (the bootstrap addTab opens it): fall back to the root.
+    expect(scopeSettingsForRestore(settings, SCOPE, `${SCOPE}/zh`).lastActiveTabIndex).toBe(0);
+  });
+
   test("prepends the scope root when the persisted session lacks it", () => {
     const scoped = scopeSettingsForRestore(
       baseSettings({

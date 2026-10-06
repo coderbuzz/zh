@@ -1,0 +1,45 @@
+diff --git a/packages/shared/src/platform.ts b/packages/shared/src/platform.ts
+index 307a77a..54d8a4c 100644
+--- a/packages/shared/src/platform.ts
++++ b/packages/shared/src/platform.ts
+@@ -725,6 +725,12 @@ export interface IPlatformService {
+   syncWindowUnreadCount(count: number): void;
+   /** 当前窗口 active task 变化；Main 只在该窗口前台时发布全局 PiP focus。 */
+   syncActiveTaskSession(sessionId: string | null): void;
++  /**
++   * zh web: active workspace tab + its active task (null = draft) whenever
++   * either changes, so the shell can mirror them into the URL and land on the
++   * same session after a refresh or a reconnect. Other hosts leave it unset.
++   */
++  syncActiveWorkspaceTask?(workspacePath: string | null, taskId: string | null): void;
+ 
+   /** 同步需要 main 进程即时感知的应用设置；Web fallback 可忽略 */
+   syncAppSettings?(patch: Partial<AppSettings>): void;
+diff --git a/packages/ui/src/root/useRootPlatformEffects.ts b/packages/ui/src/root/useRootPlatformEffects.ts
+index 4dfc81f..0acfff6 100644
+--- a/packages/ui/src/root/useRootPlatformEffects.ts
++++ b/packages/ui/src/root/useRootPlatformEffects.ts
+@@ -593,4 +593,23 @@ export function useRootPlatformEffects({
+     syncActiveSession();
+     return useZCodeSessionStore.subscribe(syncActiveSession);
+   }, [activeTab, activeTabId, isDesktop, platform]);
++
++  useEffect(() => {
++    const syncActiveWorkspaceTask = platform.syncActiveWorkspaceTask;
++    if (!syncActiveWorkspaceTask) return;
++    const workspacePath = activeTab?.workspacePath ?? null;
++    const workspaceIdentity = activeTab?.workspaceIdentity;
++    let lastTaskId: string | null | undefined;
++    const sync = (): void => {
++      const taskId = workspacePath
++        ? (useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
++            .activeTaskId ?? null)
++        : null;
++      if (taskId === lastTaskId) return;
++      lastTaskId = taskId;
++      syncActiveWorkspaceTask(workspacePath, taskId);
++    };
++    sync();
++    return useZCodeSessionStore.subscribe(sync);
++  }, [activeTab, platform]);
+ }
