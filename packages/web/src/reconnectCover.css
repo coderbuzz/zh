@@ -1,0 +1,14 @@
+/* Frozen copy of the previous UI shown while Root remounts after a reconnect. */
+.zh-remount-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.18s ease-out;
+}
+
+.zh-remount-cover-out {
+  opacity: 0;
+}
