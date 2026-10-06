@@ -33,6 +33,15 @@ export interface SettingServiceLike {
   ensureDefaultProject(homedir: string): Promise<{ path: string; created: boolean }>;
 }
 
+/**
+ * The app-owned "conversation" workspace (Tasks section: tasks without a
+ * project) lives outside the server workspace but is shared by design, so the
+ * scoped view keeps it.
+ */
+export function isConversationEntry(entry: PersistedWorkspaceSessionEntry): boolean {
+  return entry.kind === "local" && entry.workspacePurpose === "conversation";
+}
+
 /** A path is in scope when it is the scope root itself or lives underneath it. */
 export function isWorkspacePathInScope(path: string, scopePath: string): boolean {
   if (path === scopePath) {
@@ -63,7 +72,10 @@ export function scopeSettingsForRestore(
   let scopeEntry: LocalWorkspaceSessionEntry | null = null;
   let activeEntry: LocalWorkspaceSessionEntry | null = null;
   for (const entry of readSessionEntries(settings)) {
-    if (entry.kind !== "local" || !isWorkspacePathInScope(entry.workspacePath, scopePath)) {
+    if (
+      entry.kind !== "local" ||
+      !(isWorkspacePathInScope(entry.workspacePath, scopePath) || isConversationEntry(entry))
+    ) {
       continue;
     }
     if (!scoped.some((existing) => existing.workspacePath === entry.workspacePath)) {
@@ -110,19 +122,25 @@ export function mergeScopedWorkspaceSessionPatch(
   const merged: Partial<AppSettings> = { ...patch };
   const rawEntries = readSessionEntries(raw);
   if (patch.lastWorkspaceSession !== undefined) {
-    const written = patch.lastWorkspaceSession.filter(
+    const local = patch.lastWorkspaceSession.filter(
       (entry): entry is LocalWorkspaceSessionEntry => entry.kind === "local",
+    );
+    // Dedupe by path: earlier merges stacked copies of the conversation entry.
+    const written = local.filter(
+      (entry, index) => local.findIndex((o) => o.workspacePath === entry.workspacePath) === index,
     );
     // In-scope raw entries are never preserved: the written list is the
     // instance's full current tab set, so an in-scope entry missing from it
     // was closed by the user and must not resurrect from the stale snapshot.
     const preserved = rawEntries.filter(
-      (entry) => entry.kind !== "local" || !isWorkspacePathInScope(entry.workspacePath, scopePath),
+      (entry) =>
+        entry.kind !== "local" ||
+        !(isWorkspacePathInScope(entry.workspacePath, scopePath) || isConversationEntry(entry)),
     );
     merged.lastWorkspaceSession = [...written, ...preserved];
     if (patch.lastActiveTabIndex !== undefined && written.length > 0) {
-      const activeIndex = Math.min(Math.max(patch.lastActiveTabIndex, 0), written.length - 1);
-      const activePath = written[activeIndex]?.workspacePath;
+      const activeIndex = Math.min(Math.max(patch.lastActiveTabIndex, 0), local.length - 1);
+      const activePath = local[activeIndex]?.workspacePath;
       const mergedIndex = merged.lastWorkspaceSession.findIndex(
         (entry) => entry.kind === "local" && entry.workspacePath === activePath,
       );

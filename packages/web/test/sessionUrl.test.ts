@@ -34,4 +34,12 @@ describe("session URL hash", () => {
     expect(parseSessionHash("#ws=a/./b", SCOPE)).toBeNull();
     expect(parseSessionHash("#ws=%2Fnalar%2F", SCOPE)).toEqual({ workspacePath: `${SCOPE}/nalar` });
   });
+
+  test("conversation (Tasks) workspace uses the ~conversation token", () => {
+    const CONV = "/home/ubuntu/.zcode/workspace/default";
+    const hash = formatSessionHash(SCOPE, CONV, "sess_9", "conversation");
+    expect(hash).toBe("#ws=~conversation&task=sess_9");
+    expect(parseSessionHash(hash ?? "", SCOPE, CONV)).toEqual({ workspacePath: CONV, taskId: "sess_9" });
+    expect(parseSessionHash(hash ?? "", SCOPE)).toBeNull();
+  });
 });

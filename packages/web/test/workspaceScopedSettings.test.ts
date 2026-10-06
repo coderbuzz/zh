@@ -275,3 +275,36 @@ describe("createWorkspaceScopedSettingService", () => {
     });
   });
 });
+
+describe("conversation workspace (Tasks section)", () => {
+  const CONV = "/home/ubuntu/.zcode/workspace/default";
+  const convEntry = (): PersistedWorkspaceSessionEntry => ({
+    kind: "local",
+    workspacePath: CONV,
+    workspacePurpose: "conversation",
+  });
+
+  test("the scoped view keeps the conversation tab (deduped)", () => {
+    const scoped = scopeSettingsForRestore(
+      baseSettings({ lastWorkspaceSession: [convEntry(), localEntry(SCOPE), convEntry()] }),
+      SCOPE,
+    );
+    expect(scoped.lastWorkspaceSession?.map((e) => (e as { workspacePath: string }).workspacePath)).toEqual([
+      CONV,
+      SCOPE,
+    ]);
+    expect(scoped.lastWorkspaceSession?.[scoped.lastActiveTabIndex]).toMatchObject({ workspacePath: SCOPE });
+  });
+
+  test("writes do not stack copies of the conversation entry", () => {
+    const raw = baseSettings({ lastWorkspaceSession: [convEntry(), convEntry(), localEntry(SCOPE)] });
+    const merged = mergeScopedWorkspaceSessionPatch(
+      raw,
+      { lastWorkspaceSession: [convEntry(), localEntry(SCOPE)], lastActiveTabIndex: 1 },
+      SCOPE,
+    );
+    const paths = merged.lastWorkspaceSession?.map((e) => (e as { workspacePath: string }).workspacePath);
+    expect(paths).toEqual([CONV, SCOPE]);
+    expect(merged.lastActiveTabIndex).toBe(1);
+  });
+});

@@ -1,8 +1,8 @@
 diff --git a/packages/shared/src/platform.ts b/packages/shared/src/platform.ts
-index 307a77a..54d8a4c 100644
+index 307a77a..076a0b1 100644
 --- a/packages/shared/src/platform.ts
 +++ b/packages/shared/src/platform.ts
-@@ -725,6 +725,12 @@ export interface IPlatformService {
+@@ -725,6 +725,16 @@ export interface IPlatformService {
    syncWindowUnreadCount(count: number): void;
    /** 当前窗口 active task 变化；Main 只在该窗口前台时发布全局 PiP focus。 */
    syncActiveTaskSession(sessionId: string | null): void;
@@ -11,15 +11,19 @@ index 307a77a..54d8a4c 100644
 +   * either changes, so the shell can mirror them into the URL and land on the
 +   * same session after a refresh or a reconnect. Other hosts leave it unset.
 +   */
-+  syncActiveWorkspaceTask?(workspacePath: string | null, taskId: string | null): void;
++  syncActiveWorkspaceTask?(
++    workspacePath: string | null,
++    taskId: string | null,
++    workspacePurpose?: string,
++  ): void;
  
    /** 同步需要 main 进程即时感知的应用设置；Web fallback 可忽略 */
    syncAppSettings?(patch: Partial<AppSettings>): void;
 diff --git a/packages/ui/src/root/useRootPlatformEffects.ts b/packages/ui/src/root/useRootPlatformEffects.ts
-index 4dfc81f..0acfff6 100644
+index 4dfc81f..e33f681 100644
 --- a/packages/ui/src/root/useRootPlatformEffects.ts
 +++ b/packages/ui/src/root/useRootPlatformEffects.ts
-@@ -593,4 +593,23 @@ export function useRootPlatformEffects({
+@@ -593,4 +593,24 @@ export function useRootPlatformEffects({
      syncActiveSession();
      return useZCodeSessionStore.subscribe(syncActiveSession);
    }, [activeTab, activeTabId, isDesktop, platform]);
@@ -29,6 +33,7 @@ index 4dfc81f..0acfff6 100644
 +    if (!syncActiveWorkspaceTask) return;
 +    const workspacePath = activeTab?.workspacePath ?? null;
 +    const workspaceIdentity = activeTab?.workspaceIdentity;
++    const workspacePurpose = activeTab?.workspacePurpose;
 +    let lastTaskId: string | null | undefined;
 +    const sync = (): void => {
 +      const taskId = workspacePath
@@ -37,7 +42,7 @@ index 4dfc81f..0acfff6 100644
 +        : null;
 +      if (taskId === lastTaskId) return;
 +      lastTaskId = taskId;
-+      syncActiveWorkspaceTask(workspacePath, taskId);
++      syncActiveWorkspaceTask(workspacePath, taskId, workspacePurpose);
 +    };
 +    sync();
 +    return useZCodeSessionStore.subscribe(sync);

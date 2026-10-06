@@ -5,6 +5,7 @@
 //   #ws=nalar&task=sess_…   task in <server workspace>/nalar
 //   #ws=nalar               draft (new task) in that project
 //   #task=sess_…            task in the server workspace itself
+//   #ws=~conversation&task=…  task in the app's project-less "Tasks" workspace
 //
 // `ws` is relative to the server workspace so the URL never points outside it.
 import { isWorkspacePathInScope } from "./workspaceScopedSettings.js";
@@ -18,7 +19,14 @@ function trimSlashes(path: string): string {
   return path.replace(/^\/+|\/+$/gu, "");
 }
 
-export function parseSessionHash(hash: string, scopePath: string): SessionUrlTarget | null {
+export const CONVERSATION_WS = "~conversation";
+
+/** `conversationPath` resolves the Tasks workspace (it lives outside the scope). */
+export function parseSessionHash(
+  hash: string,
+  scopePath: string,
+  conversationPath?: string,
+): SessionUrlTarget | null {
   const params = new URLSearchParams(hash.replace(/^#/u, ""));
   const relative = trimSlashes(params.get("ws") ?? "");
   const taskId = params.get("task") || undefined;
@@ -27,6 +35,9 @@ export function parseSessionHash(hash: string, scopePath: string): SessionUrlTar
   }
   if (relative.split("/").some((segment) => segment === "." || segment === "..")) {
     return null;
+  }
+  if (relative === CONVERSATION_WS) {
+    return conversationPath ? { workspacePath: conversationPath, ...(taskId ? { taskId } : {}) } : null;
   }
   const root = scopePath.replace(/\/+$/u, "");
   return {
@@ -40,7 +51,11 @@ export function formatSessionHash(
   scopePath: string,
   workspacePath: string,
   taskId: string | null,
+  purpose?: string,
 ): string | null {
+  if (purpose === "conversation") {
+    return taskId ? `#ws=${CONVERSATION_WS}&task=${encodeURIComponent(taskId)}` : `#ws=${CONVERSATION_WS}`;
+  }
   if (!isWorkspacePathInScope(workspacePath, scopePath)) {
     return null;
   }
