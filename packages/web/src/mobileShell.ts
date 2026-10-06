@@ -36,6 +36,9 @@ const SIDEBAR_VISIBILITY_EVENT = "zh:sidebar-visibility";
 // renders under the scrim mask.
 const NAVIGATING_SELECTOR = [
   '[data-testid^="task-item-"]',
+  // The sidebar's top "New task" row is NewTaskButtonGroup (task-new-button);
+  // conversation-new-task is the per-project + icon, a different element.
+  '[data-testid="task-new-button"]',
   '[data-testid="conversation-new-task"]',
   '[data-testid="automations-open"]',
   '[data-testid="plugin-store-sidebar-open"]',
