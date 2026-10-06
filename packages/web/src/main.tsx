@@ -37,6 +37,7 @@ import {
   resolveConversationShareCodeFromPath,
 } from "./share/conversationShareRoute.js";
 import { setConnectionIndicator } from "./connectionIndicator.js";
+import { coverForRemount } from "./reconnectCover.js";
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
 import { setupMobileShell } from "./mobileShell.js";
@@ -638,6 +639,7 @@ async function bootstrapWebApp() {
       mountGeneration += 1;
       if (isReconnect) {
         window.__zhWebReconnectRestore = true;
+        coverForRemount(document.getElementById("root")!);
       }
       // The web UI gets a workspace-scoped view of the shared settings file
       // (see workspaceScopedSettings.ts): session restore only ever sees this
