@@ -15,6 +15,7 @@ import { ReconnectingWebChannel } from "@zcode/client";
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
 import { withWorkspaceScopedSettings } from "./workspaceScopedSettings.js";
+import { formatSessionHash, parseSessionHash, writeSessionHash } from "./sessionUrl.js";
 import { WEB_ZAI_OAUTH_CONFIG, resolveWebAuthDevReturnTo } from "./auth/webZaiOAuthConfig.js";
 import { parseOAuthState, resolveSafeAppReturnTo } from "./auth/oauthStateCodec.js";
 import { resolveWebCommunityUrl, resolveWebHelpConfig } from "./communityUrl.js";
@@ -94,7 +95,6 @@ interface WebBootstrapResult {
   wsUrl: string;
   initialWorkspaceAbsPath?: string;
   initialWorkspaceIdentity?: string;
-  initialTaskId?: string;
   allowOpenWorkspace?: boolean;
 }
 
@@ -198,7 +198,7 @@ async function renderConversationSharePage(): Promise<void> {
   );
 }
 
-function createWebPlatform(): IPlatformService {
+function createWebPlatform(sessionScopePath?: string): IPlatformService {
   return {
     canSelectFilePath: false,
     // Web 端无法打开系统目录选择框
@@ -301,6 +301,17 @@ function createWebPlatform(): IPlatformService {
     // Web 端没有宿主层 Dock / 任务栏徽标，保持空实现以兼容统一平台接口
     syncWindowUnreadCount: () => {},
     syncActiveTaskSession: () => {},
+    // Mirror the open session into the URL hash (sessionUrl.ts) so a refresh
+    // or reconnect reopens it. No tab yet = boot transient; leave the URL be.
+    syncActiveWorkspaceTask: (workspacePath, taskId) => {
+      if (!sessionScopePath || !workspacePath) {
+        return;
+      }
+      const hash = formatSessionHash(sessionScopePath, workspacePath, taskId);
+      if (hash !== null) {
+        writeSessionHash(hash);
+      }
+    },
     onFocusTab: () => () => {},
     onNewTab: () => () => {},
     onCloseActiveContextRequest: () => () => {},
@@ -595,7 +606,12 @@ async function bootstrapWebApp() {
     onConnected: (services) => {
       const isReconnect = firstConnectSettled;
       firstConnectSettled = true;
-      const platform = createWebPlatform();
+      const scopePath = bootstrap.initialWorkspaceAbsPath;
+      const platform = createWebPlatform(scopePath);
+      // Read on every mount: a reconnect reopens whatever the user has open
+      // now, not what the page was first loaded with.
+      const urlTarget = scopePath ? parseSessionHash(window.location.hash, scopePath) : null;
+      const initialWorkspaceAbsPath = urlTarget?.workspacePath ?? scopePath;
       document.title = "zh - Web + Server";
       setConnectionIndicator("hidden");
 
@@ -605,14 +621,16 @@ async function bootstrapWebApp() {
       }
       // The web UI gets a workspace-scoped view of the shared settings file
       // (see workspaceScopedSettings.ts): session restore only ever sees this
-      // instance's workspace tabs, with the server workspace as the active
-      // tab — so the shell that consumes the one-shot pane-session restore is
-      // always the bootstrapped one (the v0.5.10 regression), while every
+      // instance's workspace tabs, with the bootstrapped workspace (the URL's
+      // session, else the server workspace) as the active tab — so the shell
+      // that consumes the one-shot pane-session restore is always the
+      // bootstrapped one (the v0.5.10 regression), while every
       // previously opened project still comes back after a refresh (the
       // v0.5.11 regression, caused by disabling restore altogether).
       const scopedServices = withWorkspaceScopedSettings(
         services,
-        bootstrap.initialWorkspaceAbsPath,
+        scopePath,
+        initialWorkspaceAbsPath,
       );
       root.render(
         <AppErrorBoundary key={`mount-${mountGeneration}`}>
@@ -624,12 +642,14 @@ async function bootstrapWebApp() {
             <Root
               services={scopedServices}
               platform={platform}
-              initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
-              initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
-              initialTaskId={bootstrap.initialTaskId}
+              initialWorkspaceAbsPath={initialWorkspaceAbsPath}
+              initialWorkspaceIdentity={
+                initialWorkspaceAbsPath === scopePath ? bootstrap.initialWorkspaceIdentity : undefined
+              }
+              initialTaskId={urlTarget?.taskId}
               // Without a bootstrapped workspace (remote/attach mode) there is
               // no scope to restore into; keep restore off there.
-              restoreSession={Boolean(bootstrap.initialWorkspaceAbsPath)}
+              restoreSession={Boolean(scopePath)}
               allowOpenWorkspace={bootstrap.allowOpenWorkspace}
               preferDirectoryBrowser
               supportsEmbeddedBrowser={false}

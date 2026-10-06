@@ -49,13 +49,19 @@ function readSessionEntries(settings: AppSettings): PersistedWorkspaceSessionEnt
 /**
  * The read view the web UI restores from: local workspace tabs inside the
  * scope (remote targets are not restorable on web), deduped, with the server
- * workspace guaranteed to exist and forced active — the workspace shell that
- * mounts first is the one allowed to consume the one-shot pane-session
- * restore, so it must be the tab the server bootstraps.
+ * workspace guaranteed to exist. The active tab is forced to `activePath`
+ * (the workspace the shell bootstraps: the URL's session, else the server
+ * workspace) — the workspace shell that mounts first is the one allowed to
+ * consume the one-shot pane-session restore, so it must be the bootstrapped tab.
  */
-export function scopeSettingsForRestore(settings: AppSettings, scopePath: string): AppSettings {
+export function scopeSettingsForRestore(
+  settings: AppSettings,
+  scopePath: string,
+  activePath: string = scopePath,
+): AppSettings {
   const scoped: LocalWorkspaceSessionEntry[] = [];
   let scopeEntry: LocalWorkspaceSessionEntry | null = null;
+  let activeEntry: LocalWorkspaceSessionEntry | null = null;
   for (const entry of readSessionEntries(settings)) {
     if (entry.kind !== "local" || !isWorkspacePathInScope(entry.workspacePath, scopePath)) {
       continue;
@@ -66,6 +72,9 @@ export function scopeSettingsForRestore(settings: AppSettings, scopePath: string
     if (entry.workspacePath === scopePath) {
       // Later duplicates lose to the first scope-root entry.
       scopeEntry = scopeEntry ?? entry;
+    }
+    if (entry.workspacePath === activePath) {
+      activeEntry = activeEntry ?? entry;
     }
   }
   if (!scopeEntry) {
@@ -80,7 +89,7 @@ export function scopeSettingsForRestore(settings: AppSettings, scopePath: string
   return {
     ...settings,
     lastWorkspaceSession: scoped,
-    lastActiveTabIndex: Math.max(scoped.indexOf(scopeEntry), 0),
+    lastActiveTabIndex: Math.max(scoped.indexOf(activeEntry ?? scopeEntry), 0),
     recentProjects,
   };
 }
@@ -137,10 +146,11 @@ export function mergeScopedWorkspaceSessionPatch(
 export function createWorkspaceScopedSettingService(
   inner: SettingServiceLike,
   scopePath: string,
+  activePath?: string,
 ): SettingServiceLike {
   return {
     async get() {
-      return scopeSettingsForRestore(await inner.get(), scopePath);
+      return scopeSettingsForRestore(await inner.get(), scopePath, activePath);
     },
     async update(patch, expectedAccountSettings) {
       const raw = await inner.get();
@@ -163,13 +173,14 @@ export function createWorkspaceScopedSettingService(
 export function withWorkspaceScopedSettings<ServicesT extends object>(
   services: ServicesT & { settingService: SettingServiceLike },
   scopePath: string | undefined,
+  activePath?: string,
 ): ServicesT {
   if (!scopePath) {
     return services;
   }
   const scoped = Object.create(services) as ServicesT & { settingService: SettingServiceLike };
   Object.defineProperty(scoped, "settingService", {
-    value: createWorkspaceScopedSettingService(services.settingService, scopePath),
+    value: createWorkspaceScopedSettingService(services.settingService, scopePath, activePath),
     enumerable: true,
   });
   return scoped;
