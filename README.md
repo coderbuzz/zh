@@ -226,6 +226,29 @@ Aliyun captcha verify param is obtained in the browser (config from
 captcha, app-version, and platform headers. With no usable captcha config
 the claim is refused client-side, matching the desktop app.
 
+### Automations (scheduled tasks)
+
+Since 0.5.17 the headless web server runs the automation scheduler itself
+(upstream puts it in the desktop app's dedicated scheduler process, which
+`zh web` does not have). Every automation created from a chat session
+(`CronCreate`) or the UI is stored in `~/.zcode/v2/tasks-index.sqlite` and
+polled every 20 seconds by the server process:
+
+- A due automation is dispatched in-process: the scheduler claims it
+  (single-flight, crash-safe), creates or resumes the target task, sends the
+  saved prompt, and records the run in the automation's History tab
+  (`dispatched` / `failed_to_dispatch` with retry backoff, then the real
+  turn outcome `succeeded` / `failed` / `stopped`).
+- A fire missed while the host was not running is not silently rolled to the
+  next occurrence. Within a 5-minute grace window it still fires
+  (catch-up); beyond it the run is recorded as `skipped`
+  (`missed_while_host_not_running`) and a pure one-shot automation is
+  finalized as `completed`, so the History tab always shows what happened.
+- **Run now** works: the server wires the immediate dispatcher that desktop
+  hosts provide, so the UI button enqueues a manual run instead of failing
+  with "Automation immediate dispatcher is unavailable". Manual runs do not
+  move the cron schedule.
+
 ### Moving zcode state to a web server host
 
 `zh web` reads the same `~/.zcode/v2` state as the desktop app. The
