@@ -208,7 +208,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           cat > notes.md <<EOF
-          zheadless $TAG
+          zh $TAG
 
           Install (auto: bundle when bun or node >= 22 is present, binary otherwise):
 
@@ -222,7 +222,7 @@ jobs:
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=source   # build from source, needs bun
           EOF
           # beta/canary tags (e.g. v0.5.18-beta.1) publish as prereleases
-          flags=(--title "zheadless $TAG" --notes-file notes.md)
+          flags=(--title "zh $TAG" --notes-file notes.md)
           case "$TAG" in
             *-beta*|*-canary*) flags+=(--prerelease) ;;
           esac
