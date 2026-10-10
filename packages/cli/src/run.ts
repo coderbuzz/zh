@@ -107,6 +107,8 @@ const globalOptions = (
     browserExecutable,
     browserUse,
     detectedLocale,
+    ...(values.effort !== undefined ? { effort: values.effort } : {}),
+    ...(values.model !== undefined ? { model: values.model } : {}),
     ...(values["enable-workflow"] === true ? { enableWorkflow: true } : {}),
     force: values.force === true,
     json: values.json === true,

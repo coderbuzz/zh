@@ -44,6 +44,8 @@ Options:
   --force-mcs      Force mid-conversation system projection for Anthropic providers
   --locale <locale>  UI locale: en-US, zh-CN, or auto
   --mode <mode>    Permission mode for prompts: build, edit, plan, or yolo (default: yolo for --prompt)
+  --model <provider/model[$level]>  Model for this --prompt/--target run (saved settings unchanged)
+  --effort <level>  Reasoning effort for this run; with no --model, applies to the default model
   --resume <sessionId>  Resume a persisted session by sessionId (sess_...)
   --target <text>  Run or set the session goal in headless mode
   --target-replace Replace any existing session goal set by --target
