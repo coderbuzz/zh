@@ -25,6 +25,7 @@ import {
   runCliCleanupWithTimeout,
 } from "./shutdown.js";
 import { runSkillsCommand } from "./skills-command.js";
+import { createWebBridgedCredentialStore } from "./web-account-bridge.js";
 import { resolveModelFlag } from "./zh-model-flag.js";
 import type { CommandCenterApp, SlashCommand } from "./command-center.js";
 import type {
@@ -205,6 +206,7 @@ export const runPrompt = async (
         : {
             standalone: {
               ...createCliProviderRefreshReporter(ctx.stderr),
+              credentialStore: createWebBridgedCredentialStore({ ...env }),
               ...(deps.userConfigPath ? { legacyCliUserConfigFilePath: deps.userConfigPath } : {}),
             },
           },

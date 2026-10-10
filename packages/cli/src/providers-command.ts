@@ -1,6 +1,7 @@
 import type { RunContext, GlobalOptions } from "@zcode/shared-types";
 import type { RunDependencies } from "./cli-types.js";
 import { ZCODE_BUILTIN_PROVIDER_BUNDLED_CONFIG_FILE_ENV } from "@zcode/provider-node";
+import { createWebBridgedCredentialStore } from "./web-account-bridge.js";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
 
 /**
@@ -172,7 +173,9 @@ export const runProvidersCommand = async (
   > | undefined;
   try {
     const boot = await loadBootstrapModule();
-    runtime = await boot.startProcessProviderRegistryRuntime(env, { standalone: {} });
+    runtime = await boot.startProcessProviderRegistryRuntime(env, {
+      standalone: { credentialStore: createWebBridgedCredentialStore(env) },
+    });
     const snapshot = runtime.runtime.registryService.getSnapshot() as unknown as SnapshotView;
     const catalog = buildProvidersCatalog(snapshot);
     const wantModel = flags.model?.toLowerCase();
