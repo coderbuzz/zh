@@ -13,7 +13,7 @@ import {
  * under the key the CLI looks for. The only thing missing for the CLI is the
  * `account-provider:<providerId>:identity` pointer, which only `zh login` writes. Web keeps the
  * identity in the oauth user profile, so this wrapper answers that one key from the profile when
- * web's own settings say the family is connected with an individual coding plan.
+ * web's own settings say the family is connected (individual coding plan, or any plan for Start Plan).
  *
  * Read-only: no writes, no refresh, no network; a profile that cannot be read is treated as absent
  * (unlike the web repo, which clears the oauth session on a decrypt error).
@@ -24,19 +24,22 @@ const FAMILIES = {
 } as const;
 type Family = keyof typeof FAMILIES;
 
-const IDENTITY_KEY = /^account-provider:(account:(zai|bigmodel)-individual-coding-plan):identity$/;
+const IDENTITY_KEY =
+  /^account-provider:(account:(zai|bigmodel)-(individual-coding-plan|start-plan)):identity$/;
 
 export function createWebBridgedCredentialStore(
   env: Record<string, string | undefined>,
 ): SharedZCodeCredentialStore {
   const store = createSharedZCodeCredentialStore({ env });
 
-  const webConnectedWithIndividualPlan = async (family: Family): Promise<boolean> => {
+  const webConnected = async (family: Family, plan: string): Promise<boolean> => {
     try {
       const settings = JSON.parse(await readFile(join(dirname(store.filePath), "setting.json"), "utf8"));
       return (
         settings.providerFamilyDomain === family &&
-        settings.providerFamilyConnectionSelections?.[family]?.kind === "individual-coding-plan"
+        // Start Plan needs only the connected family (same as web's resolveCurrentAccountAccess).
+        (plan === "start-plan" ||
+          settings.providerFamilyConnectionSelections?.[family]?.kind === plan)
       );
     } catch {
       return false;
@@ -44,8 +47,9 @@ export function createWebBridgedCredentialStore(
   };
 
   const webIdentity = async (key: string): Promise<string | null> => {
-    const family = IDENTITY_KEY.exec(key)?.[2] as Family | undefined;
-    if (!family || !(await webConnectedWithIndividualPlan(family))) return null;
+    const match = IDENTITY_KEY.exec(key);
+    const family = match?.[2] as Family | undefined;
+    if (!family || !(await webConnected(family, match![3]!))) return null;
     try {
       const raw = await store.load(FAMILIES[family]);
       const profile = raw ? JSON.parse(raw) : {};
