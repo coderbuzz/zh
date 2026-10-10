@@ -95,9 +95,10 @@ const ZCODE_MANUAL_CLAIM_CLAIM_API_PATH = "/api/v1/zcode-plan/billing/claim";
  * zh's own 0.x release version is unknown to it. Identified live on
  * 2026-10-04: query app_version 3.14.3/3.14.4 returned the Trust Build offer
  * while 0.5.3 returned none (the header variant was proven irrelevant).
- * Bump this alongside scripts/sync-vendor.sh when the vendor baseline moves.
+ * Bump this alongside the vendor baseline (ZCODE_VENDORED_REV in
+ * .github/workflows/release.yml) when it moves — currently v3.15.1.
  */
-export const ZCODE_MANUAL_CLAIM_CLIENT_VERSION = "3.14.3";
+export const ZCODE_MANUAL_CLAIM_CLIENT_VERSION = "3.15.1";
 const REQUEST_TIMEOUT_MS = 15_000;
 const CLIENT_CONFIG_CACHE_TTL_MS = 60 * 60 * 1000;
 const CODING_PLAN_ZAI_OVERSEAS_PAYMENT_REQUIRED = "coding_plan_zai_overseas_payment_required";
