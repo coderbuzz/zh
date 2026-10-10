@@ -28,7 +28,8 @@
 set -eu
 
 REPO="coderbuzz/zh"
-DEFAULT_HOME="$HOME/.local/share/zheadless"
+DEFAULT_HOME="$HOME/.local/share/zh"
+LEGACY_HOME="$HOME/.local/share/zheadless" # install root before the repo rename
 DEFAULT_PREFIX="$HOME/.local/bin"
 
 METHOD=""
@@ -57,6 +58,16 @@ done
 
 LINK="$PREFIX/zh"
 
+# Move a pre-rename install root (~/.local/share/zheadless) to the new default
+# and leave a symlink behind so old paths keep resolving. Only for the default
+# home; an install root chosen with --home is never touched.
+if [ "$INSTALL_HOME" = "$DEFAULT_HOME" ] && [ -d "$LEGACY_HOME" ] && [ ! -L "$LEGACY_HOME" ] && [ ! -e "$DEFAULT_HOME" ]; then
+  mv "$LEGACY_HOME" "$DEFAULT_HOME"
+  [ -f "$DEFAULT_HOME/.zheadless-install" ] && mv "$DEFAULT_HOME/.zheadless-install" "$DEFAULT_HOME/.zh-install"
+  ln -s "$DEFAULT_HOME" "$LEGACY_HOME"
+  echo "migrated install root: $LEGACY_HOME -> $DEFAULT_HOME (symlink left at the old path)"
+fi
+
 if [ "$METHOD" = "uninstall" ]; then
   if [ -L "$LINK" ]; then
     target_dir=$(cd "$(dirname "$(readlink "$LINK")")" 2>/dev/null && pwd)
@@ -66,9 +77,10 @@ if [ "$METHOD" = "uninstall" ]; then
     target_dir=""
     echo "no launcher at $LINK"
   fi
-  if [ -f "$INSTALL_HOME/.zheadless-install" ]; then
+  if [ -f "$INSTALL_HOME/.zh-install" ] || [ -f "$INSTALL_HOME/.zheadless-install" ]; then
     rm -rf "$INSTALL_HOME"
     echo "removed $INSTALL_HOME"
+    [ -L "$LEGACY_HOME" ] && rm "$LEGACY_HOME"
   elif [ -n "$target_dir" ]; then
     echo "note: install root $INSTALL_HOME not found or not managed; left untouched"
   fi
@@ -315,8 +327,9 @@ if [ "$METHOD" = "bundle" ]; then
   [ -s "$PIN_FILE" ] || rm -f "$PIN_FILE"
 fi
 
-echo "zheadless-install: method=$METHOD version=${TAG:-local} date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  > "$INSTALL_HOME/.zheadless-install"
+echo "zh-install: method=$METHOD version=${TAG:-local} date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "$INSTALL_HOME/.zh-install"
+rm -f "$INSTALL_HOME/.zheadless-install"
 
 # --- symlink -----------------------------------------------------------------
 mkdir -p "$PREFIX"
