@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Coding Plan 订阅协议类型需要集中导出给 UI、services 和 RPC 共享，拆散会增加跨包类型入口复杂度。 */
+import type { Locale } from "./protocol.js";
 import type { ProviderFamilyDomain } from "./model-provider-family.js";
 import type { BUILTIN_MODEL_PROVIDER_IDS } from "./model-provider-types.js";
 
@@ -99,6 +100,20 @@ export interface CodingPlanStaticTeamProduct {
 export type CodingPlanStaticTeamProductsConfig = Partial<
   Record<CodingPlanSubscriptionProviderId, CodingPlanStaticTeamProduct[]>
 >;
+
+export interface CodingPlanBillingDiscountLocaleCopy {
+  cardTitle?: string;
+  cardBody?: string;
+  badgeBody?: string;
+  infoTitle?: string;
+  infoBody?: string;
+}
+
+/** client/configs `codingPlanBillingDiscount`：限时优惠多语言文案；字段缺席 = 无活动。 */
+export type CodingPlanBillingDiscountConfig = Partial<
+  Record<Locale, CodingPlanBillingDiscountLocaleCopy>
+> &
+  Record<string, unknown>;
 
 export interface StartPlanPreviewEntitlement {
   grantUnits: number;

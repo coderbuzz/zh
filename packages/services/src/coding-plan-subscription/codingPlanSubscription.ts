@@ -2,6 +2,7 @@ import type {
   CodingPlanAgreementResponse,
   CodingPlanBatchPreviewRequest,
   CodingPlanBatchPreviewResponse,
+  CodingPlanBillingDiscountConfig,
   CodingPlanCreateSignRequest,
   CodingPlanPaymentCheckRequest,
   CodingPlanPaymentCheckResponse,
@@ -64,6 +65,8 @@ export interface ICodingPlanSubscriptionService {
   getStaticProducts(): Promise<CodingPlanStaticProductsConfig>;
   getStaticTeamProducts(): Promise<CodingPlanStaticTeamProductsConfig>;
   getStartPlanPreview(): Promise<StartPlanPreviewConfig | null>;
+  /** 限时优惠文案配置（client/configs 快照）；字段缺席返回 undefined。 */
+  getBillingDiscount(): Promise<CodingPlanBillingDiscountConfig | undefined>;
   /** 免费套餐（manual claim）可领取列表；未登录时返回匿名可见 offer。 */
   getManualClaimPlanPreviews(): Promise<ManualClaimPlanPreviewsResponse>;
   /** 领取免费套餐；业务失败折叠进 result（不抛错）。 */

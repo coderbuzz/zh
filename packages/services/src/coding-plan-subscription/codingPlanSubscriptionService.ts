@@ -41,6 +41,7 @@ export function createCodingPlanSubscriptionService(
     getStaticProducts: () => bigmodelProvider.getStaticProducts(),
     getStaticTeamProducts: () => bigmodelProvider.getStaticTeamProducts(),
     getStartPlanPreview: () => bigmodelProvider.getStartPlanPreview(),
+    getBillingDiscount: () => bigmodelProvider.getBillingDiscount(),
     getManualClaimPlanPreviews: () => bigmodelProvider.getManualClaimPlanPreviews(),
     claimManualPlan: (request) => bigmodelProvider.claimManualPlan(request),
     getCaptchaConfig: () => bigmodelProvider.getCaptchaConfig(),

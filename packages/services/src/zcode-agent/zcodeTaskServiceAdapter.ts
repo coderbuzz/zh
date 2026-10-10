@@ -2815,6 +2815,16 @@ export function createZCodeTaskServiceAdapter(
       return settingsToConfigOptions(snapshot.settings);
     },
 
+    async getWorkspaceProviderConfigFile(params) {
+      // v3.15.1 web 客户端会读取 provider 主配置文件路径；headless 没有 per-workspace
+      // provider 配置文件，按 workspace 路径回复且 exists=false，调用方按缺失降级。
+      return {
+        provider: GLM_PROVIDER,
+        path: params.workspacePath,
+        exists: false,
+      };
+    },
+
     async getTaskNativeSessionLogFile() {
       const path = resolveZCodeAgentCurrentLogFilePath();
       // 返回 ZCode Agent 的结构化日志 JSONL；日志行中的 sessionId 用于按当前任务排查。

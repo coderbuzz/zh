@@ -582,6 +582,17 @@ export interface IZCodeTaskService {
     mode?: ZCodeTaskMode;
   }): Promise<ZCodeConfigOption[]>;
 
+  /** 获取 workspace + provider 对应的主配置文件路径 */
+  getWorkspaceProviderConfigFile(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    provider?: ZCodeProvider;
+  }): Promise<{
+    provider: ZCodeProvider;
+    path: string;
+    exists: boolean;
+  }>;
+
   /** 获取 ZCode Agent 当前结构化日志文件路径。 */
   getTaskNativeSessionLogFile(params: {
     taskId: string;

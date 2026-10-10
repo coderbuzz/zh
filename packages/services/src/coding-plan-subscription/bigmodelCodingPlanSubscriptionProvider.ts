@@ -47,6 +47,7 @@ import type {
   EnterpriseCodingPlanPricingProduct,
   EnterpriseCodingPlanProjectApiKeyUnavailableReason,
   EnterpriseCodingPlanProjectContext,
+  CodingPlanBillingDiscountConfig,
   StartPlanPreviewConfig,
   ManualClaimPlanClaimRequest,
   ManualClaimPlanClaimResult,
@@ -120,6 +121,7 @@ interface ZCodeClientConfigEnvelope {
       codingPlanStaticProducts?: CodingPlanStaticProductsConfig;
       codingPlanStaticTeamProducts?: CodingPlanStaticTeamProductsConfig;
       startPlanPreview?: StartPlanPreviewConfig | null;
+      codingPlanBillingDiscount?: CodingPlanBillingDiscountConfig;
       // 闲时任务灰度（服务端）：内层字段服务端为 snake_case，与外层 camelCase 混排。
       offPeak?: {
         enable_offpeak_task?: boolean;
@@ -277,6 +279,12 @@ export class BigModelCodingPlanSubscriptionProvider {
   async getStartPlanPreview(): Promise<StartPlanPreviewConfig | null> {
     const payload = await this.getClientConfigs();
     return unwrapClientConfigStartPlanPreview(payload);
+  }
+
+  async getBillingDiscount(): Promise<CodingPlanBillingDiscountConfig | undefined> {
+    // 与 client/configs 同源；无活动配置时返回 undefined，UI 不渲染优惠挂件。
+    const payload = await this.getClientConfigs();
+    return unwrapClientConfigBillingDiscount(payload);
   }
 
   /**
@@ -1411,6 +1419,19 @@ function isValidCardCopyConfigItem(value: unknown): boolean {
   return (
     isNonEmptyString(item.text) && (item.tooltip === undefined || typeof item.tooltip === "string")
   );
+}
+
+function unwrapClientConfigBillingDiscount(
+  payload: ZCodeClientConfigEnvelope,
+): CodingPlanBillingDiscountConfig | undefined {
+  if (payload.code !== undefined && payload.code !== 0) {
+    throw new Error(payload.msg?.trim() || "ZCode client config request failed");
+  }
+  const configs = payload.data?.configs;
+  if (!configs || !("codingPlanBillingDiscount" in configs)) {
+    return undefined;
+  }
+  return configs.codingPlanBillingDiscount;
 }
 
 function unwrapClientConfigStartPlanPreview(
