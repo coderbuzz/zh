@@ -50,16 +50,18 @@ What `auto` does, in order:
    locations (`~/.bun/bin`, `/usr/local/bin`, `/opt/homebrew/bin`, and
    `~/.nvm/versions/node/*`): `bun` (any 1.x) or `node` >= 22.
 2. Runtime found: it installs the bundle. Runtimes whose directory is not in
-   `PATH` are recorded in `~/.local/share/zheadless/.zh-runtime`, and the
+   `PATH` are recorded in `~/.local/share/zh/.zh-runtime`, and the
    launcher prefers those pinned binaries, so `zh` also works in
    non-interactive shells.
 3. No runtime: it installs the standalone binary for this OS/arch. If the
    release has no binary asset for the platform, the install fails with
    instructions to install bun or node (or force `--method=bundle`).
 
-Files live under `~/.local/share/zheadless` (`--home` to change) and the
+Files live under `~/.local/share/zh` (`--home` to change) and the
 launcher goes to `~/.local/bin/zh` (`--prefix` to change). Re-running the
-installer repairs an existing install; remove everything with:
+installer repairs an existing install (an install root left at the old
+`~/.local/share/zheadless` is moved to the new path automatically, with a
+symlink left behind); remove everything with:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/coderbuzz/zh/main/install-remote.sh | sh -s -- --uninstall
@@ -294,7 +296,7 @@ the bun runtime embedded.
 
 When the installer picks the bundle and the validated runtime lives outside
 the default `PATH` (version managers, `~/.bun` before the profile reload), it
-records the absolute path in `~/.local/share/zheadless/.zh-runtime`; the
+records the absolute path in `~/.local/share/zh/.zh-runtime`; the
 launcher sources that file and prefers the pinned binaries over `PATH`
 lookup, so `zh` also works in non-interactive shells.
 
