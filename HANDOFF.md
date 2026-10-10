@@ -352,42 +352,11 @@ recipe in CONTEXT.md gotchas or: `for v in $(env | sed -n
    by reading (build-web -> packages needs web-dist artifact; ZCODE_VENDORED_REV
    env must match the vendor baseline; update it when vendor moves).
 
-## Pending upstream sync: zcode v3.14.4 (blocked on upstream)
+## Pending upstream sync: retired
 
-Announced on the official changelog (2026-09-29) but NOT yet in git as of
-2026-10-01: `zai-org/ZCode` has no v3.14.4 tag/release and its `main` still
-sits at `29628c9` (v3.14.3). The `../zcode` clone was re-created 2026-10-01
-as a plain clone of `zai-org/ZCode` (the `coderbuzz/zcode` fork is archived;
-nothing fetches from it). Run this once the tag exists:
-
-1. Confirm availability: `git -C ../zcode ls-remote origin refs/tags/v3.14.4`.
-2. `git -C ../zcode fetch origin tag v3.14.4`.
-3. Pre-check conflicts: `git -C ../zcode diff --stat 29628c9...v3.14.4`,
-   grep the diff for captcha, and check changed paths against the patch
-   layer (CONTEXT.md "Upstream sync"). Locally-modified vendored files at
-   v3.14.3: `cli/src/{arguments,run,provider-runtime-env,
-   sea-playwright-runtime,tui-runtime-loader}.ts`, `core/src/environment.ts`,
-   `bootstrap/src/app/{bundled-plugins,official-plugin-definitions}.ts`,
-   `adapters/src/browser/index.ts`, i18n locales en-US/zh-CN,
-   `rpc/src/logging-middleware.ts`, `services` credentialService +
-   oauthCredentialRepo, `web` index.html + main.tsx, the five package.json
-   build tweaks, `config/provider/zcode-builtin.json`. The CAPTCHA fix most
-   likely lands under `services/src/model-provider/` (no local mods there).
-4. `sh scripts/sync-vendor.sh v3.14.4` (ZCODE_REPO defaults to `../zcode`).
-   Read the NOTICE lines; for a new upstream package extend the mapping
-   lists, commit `vendor: track <pkgs> in the sync mapping` on main first,
-   then re-run.
-5. On main: `git merge vendor/upstream` — real merge commit, never squash;
-   subject `Merge vendor/upstream: zcode v3.14.4 ...`. Keep the patch layer
-   on conflicts; nothing to drop (the CAPTCHA fix touches no local patch).
-6. `git tag vendor/v3.14.4` on the new vendor commit.
-7. Update `ZCODE_VENDORED_REV` in `.github/workflows/release.yml` to the new
-   full SHA (see Remaining work item 7).
-8. Update the Baseline line in CONTEXT.md to `vendor/v3.14.4 (<short>)`.
-9. Sanity: `sh build-all.sh`; `zh web` smoke test; grep the merged tree for
-   the new captcha code; confirm the diff does not break the packages/web
-   CI-overlay build contract.
-10. Push `main` + `vendor/upstream` + the tag.
+The v3.14.4 sync plan that lived here assumed the `vendor/upstream` merge flow. That flow
+is gone (see CONTEXT.md "Upstream sync"); the baseline has since moved to v3.15.1 by
+bumping `ZCODE_VENDORED_REV` directly.
 
 ## Handy paths and commands
 
