@@ -21,7 +21,7 @@ index 2b280665..474fb89f 100644
 +  }
 +}
 diff --git a/packages/ui/src/v4/ConversationComposer.tsx b/packages/ui/src/v4/ConversationComposer.tsx
-index c4121dd1..6f13f577 100644
+index c4121dd1..3f636dbb 100644
 --- a/packages/ui/src/v4/ConversationComposer.tsx
 +++ b/packages/ui/src/v4/ConversationComposer.tsx
 @@ -109,6 +109,7 @@ import {
@@ -32,22 +32,36 @@ index c4121dd1..6f13f577 100644
    resolveChatEnterShortcut,
    resolveChatEnterSubmits,
    shouldAvoidIosInputFocusZoom,
-@@ -661,13 +662,11 @@ function ConversationComposerImpl({
+@@ -661,22 +662,22 @@ function ConversationComposerImpl({
    const isMobileTextInputViewport = useIsMobileTextInputViewport();
    const primaryModifierPressed = usePrimaryFollowupModifier();
    const appleKeyboardPlatform = isAppleKeyboardPlatform();
 -  // Bugfix：M3 删除旧 ChatView 后，M5 只恢复了桌面端的 false 硬编码，已登记的手机远控
 -  // 接线没有补回，导致 Enter 误发送。恢复旧语义：手机视口下 Enter 换行并用按钮发送；
 -  // 桌面端仍由 resolveChatEnterSubmits 的视口门禁保持 Enter 发送。
--  const enterSubmits = resolveChatEnterSubmits({
--    isMobileTextInputViewport,
++  // zh: zh web never sets the isWebRemoteControl prop — upstream reserves it
++  // for the desktop-relay remote control, whose startup gates and shell assume
++  // a desktop host on the other end (see rootStartupGate.ts). Touch capability
++  // activates the same composer-level behavior instead: Enter inserts a
++  // newline on phones, iOS focus zoom is avoided, and the compact placeholder
++  // is used in the mobile viewport.
++  const zhMobileRemoteControl = isWebRemoteControl || isTouchPrimaryDevice();
+   const enterSubmits = resolveChatEnterSubmits({
+     isMobileTextInputViewport,
 -    preferEnterNewline: isWebRemoteControl,
--  });
-+  // zh: touch-primary devices (phones) send via the send button; the virtual
-+  // keyboard's Enter must insert a newline (see mobileTextInput.ts). Desktop
-+  // keeps Enter-to-send. Upstream gates this on isWebRemoteControl, which the
-+  // zh web host does not set, so touch capability decides directly.
-+  const enterSubmits = !isTouchPrimaryDevice();
-   // 修复原因：旧 ChatView 删除后，iOS 防聚焦放大的接线没有迁到 v4 composer，
-   // 手机 Web 远控输入框会重新触发 Safari 的页面缩放。
++    preferEnterNewline: zhMobileRemoteControl,
+   });
+-  // 修复原因：旧 ChatView 删除后，iOS 防聚焦放大的接线没有迁到 v4 composer，
+-  // 手机 Web 远控输入框会重新触发 Safari 的页面缩放。
    const avoidIosInputFocusZoom = shouldAvoidIosInputFocusZoom({
+     isMobileTextInputViewport,
+-    isWebRemoteControl,
++    isWebRemoteControl: zhMobileRemoteControl,
+   });
+-  // Bugfix：手机远控把完整能力说明放进绝对定位 placeholder 后，三行英文会越过
+-  // 40px 编辑区并覆盖工具栏。手机端改用短文案并限制两行；桌面端继续保留完整提示。
+-  const compactMobilePlaceholder = isWebRemoteControl && isMobileTextInputViewport;
++  const compactMobilePlaceholder = zhMobileRemoteControl && isMobileTextInputViewport;
+   const sendShortcut = resolveChatEnterShortcut({ enterSubmits });
+   const updateText = useCallback(
+     (next: string) => {
