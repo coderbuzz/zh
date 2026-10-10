@@ -11,6 +11,7 @@ import {
   shouldLoadCliDotenvForProtocolServer,
 } from "./env.js";
 import { formatCliHelp } from "./help.js";
+import { runProvidersCommand } from "./providers-command.js";
 import { runHooksCommand } from "./hooks-trust-command.js";
 import { detectCliLocale } from "./locale.js";
 import { loadBootstrapModule } from "./bootstrap-loader.js";
@@ -574,6 +575,12 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
         parsed.positionals.slice(1),
         pluginsCommandFlags(parsed.values),
       );
+    case "providers":
+      return await runProvidersCommand(ctx, options, commandDeps, parsed.positionals.slice(1), {
+        provider: parsed.values.provider,
+        model: parsed.values.model,
+        availableOnly: parsed.values["available-only"] === true,
+      });
     case "skills":
       return await runSkillsCommand(ctx, options, commandDeps, parsed.positionals.slice(1));
     case "web": {

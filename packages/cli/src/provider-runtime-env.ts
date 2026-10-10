@@ -128,7 +128,8 @@ function requiresProviderRuntime(argv: readonly string[]): boolean {
     command === "app-server" ||
     command === "agent-server" ||
     command === "login" ||
-    command === "logout"
+    command === "logout" ||
+    command === "providers"
   );
 }
 
