@@ -31,11 +31,13 @@ export type GlobalOptions = {
   browserExecutable?: string;
   browserUse?: "headless";
   detectedLocale?: GlobalDetectedLocale;
+  effort?: string;
   enableWorkflow?: boolean;
   force: boolean;
   json: boolean;
   locale?: GlobalLocale;
   memoryBench?: boolean;
+  model?: string;
   noColor: boolean;
   outputFormat?: GlobalOutputFormat;
   verbose: boolean;

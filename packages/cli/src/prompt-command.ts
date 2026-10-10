@@ -25,6 +25,7 @@ import {
   runCliCleanupWithTimeout,
 } from "./shutdown.js";
 import { runSkillsCommand } from "./skills-command.js";
+import { resolveModelFlag } from "./zh-model-flag.js";
 import type { CommandCenterApp, SlashCommand } from "./command-center.js";
 import type {
   CliPermissionMode,
@@ -208,6 +209,13 @@ export const runPrompt = async (
             },
           },
     );
+    // --model/--effort: validated before the app starts, so a typo exits non-zero up front.
+    const flagSelection = resolveModelFlag({
+      model: options.model,
+      effort: options.effort,
+      registry: providerRegistryRuntime.runtime.registryService.getView(),
+      configuredDefault: providerRegistryRuntime.configuredDefaultModelSelection,
+    });
     browserRuntime = createCliHeadlessBrowserRuntime(options, deps);
     app = await createApp({
       browserControlPort: browserRuntime?.browserControlPort,
@@ -226,6 +234,7 @@ export const runPrompt = async (
         : {}),
       resume: sessionId !== undefined,
       runtimeConfig: {
+        ...(flagSelection ? { modelSelection: flagSelection } : {}),
         ...(mode ? { mode } : {}),
         ...(toolDisallowlist ? { toolDisallowlist } : {}),
         ...(forceMcs ? { midConversationSystem: { mode: "force" as const } } : {}),
@@ -250,6 +259,12 @@ export const runPrompt = async (
       throw abortController.signal.reason;
     }
     traceId = app.traceId;
+    // On resume createApp ignores runtimeConfig.modelSelection (it restores the saved one),
+    // so switch the session via setModel (a transient switch is overwritten at submit time).
+    // This saves the choice on that session only; global defaults are never written.
+    if (flagSelection && sessionId !== undefined) {
+      await app.setModel(flagSelection);
+    }
     if (options.memoryBench && !app.runtime.isProjectMemoryEnabled()) {
       throw new Error(MEMORY_BENCH_DISABLED_ERROR);
     }
