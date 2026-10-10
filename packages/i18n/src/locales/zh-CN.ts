@@ -19,6 +19,8 @@ export const zhCN: ZCodeCopy = {
   commands   列出自定义 slash commands（\`commands list\`）
   doctor     检查运行时和打包假设
   login [zai|bigmodel]  通过浏览器授权登录
+  providers [list]  以 JSON 输出所有 provider/model 及 thinking 档位、状态、计费（只读，不输出密钥）
+    过滤：--provider <id>、--model <id>、--available-only
   logout     删除共享的 Z.AI 登录凭据
   plugins    管理插件与市场（\`plugins list|install|uninstall|enable|disable|update|validate|marketplace ...\`；别名 plugin）
   skills     列出本地 skills（\`skills list\`）

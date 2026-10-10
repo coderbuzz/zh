@@ -76,6 +76,12 @@ export const parseGlobalArgs = (argv: string[]) =>
       effort: {
         type: "string",
       },
+      provider: {
+        type: "string",
+      },
+      "available-only": {
+        type: "boolean",
+      },
       verbose: {
         type: "boolean",
       },

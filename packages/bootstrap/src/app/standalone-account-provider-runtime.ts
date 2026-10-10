@@ -21,6 +21,9 @@ interface StandaloneCodingPlanProvider {
   readonly providerId: string;
 }
 
+/** Same physical key web stores the zcode JWT under (SHARED_ZCODE_CREDENTIAL_KEYS.zcodeJwtToken). */
+const STANDALONE_ZCODE_JWT_KEY = "zcodejwttoken";
+
 export async function readStandaloneCodingPlanProviders(
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<readonly StandaloneCodingPlanProvider[]> {
@@ -33,10 +36,21 @@ async function readStandaloneCodingPlanCatalog(
 ): Promise<{
   readonly zcodeBuiltinRevision: string;
   readonly providers: readonly StandaloneCodingPlanProvider[];
+  readonly startPlanProviderIds?: readonly string[];
 }> {
   if (config)
     return {
       zcodeBuiltinRevision: config.revision,
+      // zh: zai Start Plan accounts signed in through zh web (JWT auth, no per-provider api-key).
+      startPlanProviderIds: config.providers
+        .entries()
+        .flatMap(([providerId, provider]) =>
+          provider.access?.type === "zhipu-account" &&
+          provider.access.mode === "start-plan" &&
+          provider.access.accountType === "zai"
+            ? [providerId]
+            : [],
+        ),
       providers: config.providers.entries().flatMap(([providerId, provider]) => {
         const access = provider.access;
         const modelId = provider.builtinModelIds?.find((candidate) => candidate.trim())?.trim();
@@ -130,8 +144,29 @@ export async function readStandaloneAccountProviderConfigSnapshot(
   const candidateByProviderId = new Map(
     candidates.map((candidate) => [candidate.providerId, candidate]),
   );
-  const providers = new ProviderConfigMap(
-    configuredProviders.map(({ family, providerId }) => {
+  const startPlanIds = catalog.startPlanProviderIds ?? [];
+  const startPlanIdentities = await credentialStore.loadMany(
+    startPlanIds.map(standaloneAccountIdentityCredentialKey),
+  );
+  const startPlanJwt = startPlanIds.length
+    ? (await credentialStore.loadMany([STANDALONE_ZCODE_JWT_KEY]))[STANDALONE_ZCODE_JWT_KEY]?.trim()
+    : undefined;
+  const startPlanEntries = startPlanIds.map(
+    (providerId) =>
+      [
+        providerId,
+        new ProviderConfig({
+          access: new ZhipuAccountAccessConfig({
+            entitled:
+              Boolean(startPlanJwt) &&
+              Boolean(startPlanIdentities[standaloneAccountIdentityCredentialKey(providerId)]?.trim()),
+          }),
+        }),
+      ] as const,
+  );
+  const providers = new ProviderConfigMap([
+    ...startPlanEntries,
+    ...configuredProviders.map(({ family, providerId }) => {
       const candidate = candidateByProviderId.get(providerId);
       const apiKey = candidate ? apiKeyByCredentialKey[candidate.credentialKey]?.trim() : undefined;
       if (!candidate || !apiKey) {
@@ -151,7 +186,7 @@ export async function readStandaloneAccountProviderConfigSnapshot(
         }),
       ] as const;
     }),
-  );
+  ]);
   return createAccountProviderConfigSnapshot(catalog.zcodeBuiltinRevision, providers);
 }
 
@@ -178,6 +213,14 @@ export function createStandaloneProviderRuntimeHeadersPort(
       input.abortSignal?.throwIfAborted();
       const providerId = input.providerId.trim();
       const access = input.accountAccess;
+      if (access?.mode === "start-plan" && access.accountType === "zai") {
+        const identity = (
+          await credentialStore.load(standaloneAccountIdentityCredentialKey(providerId))
+        )?.trim();
+        const jwt = identity ? (await credentialStore.load(STANDALONE_ZCODE_JWT_KEY))?.trim() : "";
+        if (!jwt) throw new Error(`Standalone Account Provider 缺少请求凭据: ${providerId}`);
+        return { headersApplied: true, requestAuth: { apiKey: jwt } };
+      }
       if (!access || access.mode !== "individual-coding-plan") {
         throw new Error(`Standalone Account Provider 请求身份无效: ${providerId}`);
       }

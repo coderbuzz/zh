@@ -19,6 +19,8 @@ Commands:
   commands   List custom slash commands (\`commands list\`)
   doctor     Inspect runtime and packaging assumptions
   login [zai|bigmodel]  Sign in through browser authorization
+  providers [list]  Print every provider/model with thinking levels, status and billing as JSON
+    Filters: --provider <id>, --model <id>, --available-only. Read-only; never prints keys.
   logout     Remove the shared Z.AI login credentials
   plugins    Manage plugins and marketplaces (\`plugins list|install|uninstall|enable|disable|update|validate|marketplace ...\`; alias: plugin)
   skills     List local skills (\`skills list\`)
