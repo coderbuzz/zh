@@ -11,7 +11,8 @@ permissions:
 env:
   # packages/web and the web-mode runtime build against the upstream monorepo
   # checkout at the vendor branch baseline. Update when the vendor branch moves.
-  ZCODE_VENDORED_REV: 29628c9acdb81b703bbd4080c207a0e7ce5e276e
+  # beta: tracks upstream v3.15.1 (aac4755) ahead of the main vendor baseline.
+  ZCODE_VENDORED_REV: aac4755666d09fdcd70272fcf063c077a639015f
 
 jobs:
   build-web:
@@ -220,8 +221,12 @@ jobs:
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=bundle   # bun with node fallback
               curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install-remote.sh | sh -s -- --method=source   # build from source, needs bun
           EOF
+          # beta/canary tags (e.g. v0.5.18-beta.1) publish as prereleases
+          flags=(--title "zheadless $TAG" --notes-file notes.md)
+          case "$TAG" in
+            *-beta*|*-canary*) flags+=(--prerelease) ;;
+          esac
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "zheadless $TAG" \
-            --notes-file notes.md \
+            "${flags[@]}" \
             out/*
