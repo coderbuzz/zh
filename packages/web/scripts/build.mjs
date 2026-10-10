@@ -51,7 +51,10 @@ await cp(
 // 2. Build-time defines, replicating vite.config.ts.
 // ---------------------------------------------------------------------------
 const { version } = JSON.parse(await readFile(resolve(repoRoot, "package.json"), "utf8"));
-const { pickProductEndpointEnv, resolveRuntimeZCodeEndpointOrigin, resolveZaiOAuthClientId, resolveZaiOAuthOrigin } =
+// v3.15.1 removed pickProductEndpointEnv/__ZCODE_ENDPOINT_ENV__ from the
+// upstream endpoint module and nothing in the tree consumes the define
+// anymore, so the define below is gone with it.
+const { resolveRuntimeZCodeEndpointOrigin, resolveZaiOAuthClientId, resolveZaiOAuthOrigin } =
   await import(resolve(repoRoot, "packages/shared/src/zcodeEndpoint.ts"));
 const env = process.env;
 // Release runs pass ZCODE_BUILD_VERSION so the web UI reports the zh release
@@ -63,7 +66,6 @@ const zcodeEndpointOrigin = resolveRuntimeZCodeEndpointOrigin(endpointEnv);
 const zaiOAuthOrigin = resolveZaiOAuthOrigin(endpointEnv);
 const zaiOAuthClientId = resolveZaiOAuthClientId(endpointEnv);
 const define = {
-  __ZCODE_ENDPOINT_ENV__: JSON.stringify(pickProductEndpointEnv(env)),
   __ZCODE_VERSION__: JSON.stringify(resolvedVersion),
   __ZCODE_COMMIT__: JSON.stringify(env.ZCODE_COMMIT || "unknown"),
   __ZCODE_ENV__: JSON.stringify(zcodeEnv),

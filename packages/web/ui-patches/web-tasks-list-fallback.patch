@@ -57,7 +57,7 @@ index d21c047..1423730 100644
 --- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
 +++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
 @@ -18,6 +18,8 @@ import { logger } from "@/logger.js";
- interface WindowControllerTaskListRegistry {
+ export interface WindowControllerTaskListRegistry {
    subscribe(listener: () => void): () => void;
    getRevision(): number;
 +  /** zh web: the host has no window-controller channel; callers list from the task service. */
