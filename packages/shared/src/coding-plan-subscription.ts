@@ -1,3 +1,4 @@
+import type { RequestVerificationProof } from "./request-security-edition/verification-policy.js";
 /* eslint-disable max-lines -- Coding Plan 订阅协议类型需要集中导出给 UI、services 和 RPC 共享，拆散会增加跨包类型入口复杂度。 */
 import type { Locale } from "./protocol.js";
 import type { ProviderFamilyDomain } from "./model-provider-family.js";
@@ -109,7 +110,6 @@ export interface CodingPlanBillingDiscountLocaleCopy {
   infoBody?: string;
 }
 
-/** client/configs `codingPlanBillingDiscount`：限时优惠多语言文案；字段缺席 = 无活动。 */
 export type CodingPlanBillingDiscountConfig = Partial<
   Record<Locale, CodingPlanBillingDiscountLocaleCopy>
 > &
@@ -129,7 +129,6 @@ export interface StartPlanPreviewConfig {
   entitlements: StartPlanPreviewEntitlement[];
 }
 
-/** 免费套餐（manual claim）预览里的单个权益条目；grantUnits 单位由 unitType 描述。 */
 export interface ManualClaimPlanEntitlement {
   entitlementId: string;
   showName: string;
@@ -142,7 +141,6 @@ export interface ManualClaimPlanEntitlement {
   effectiveAt?: number;
 }
 
-/** /api/v1/zcode-plan/billing/preview 归一化后的单个可领取套餐。 */
 export interface ManualClaimPlanPreview {
   planId: string;
   name: string;
@@ -151,50 +149,20 @@ export interface ManualClaimPlanPreview {
   entitlements: ManualClaimPlanEntitlement[];
 }
 
-export interface ManualClaimPlanPreviewsResponse {
-  /** 服务端时间（毫秒）；用于把 ends_at 等秒级字段换算成展示时间。 */
+export interface ManualClaimPlanPreviewSnapshot {
+  /** 本次响应的服务端时间（毫秒）；生效时间 effectiveAt 仍为 Unix 秒。 */
   serverTime?: number;
   plans: ManualClaimPlanPreview[];
 }
 
-export interface ManualClaimPlanClaimRequest {
+export interface ManualClaimPlanClaimRequest extends RequestVerificationProof {
   planId: string;
-  /** Aliyun captcha 校验凭证；captcha 关闭或缺席时为空，请求头随之省略。 */
+  /** zh: Aliyun captcha 校验凭证；captcha 关闭或缺席时为空，请求头随之省略。 */
   captchaVerifyParam?: string;
   captchaRegion?: string;
 }
 
-/** 领取成功返回的权益只带 id/名字/生效时间，与 preview 的完整权益不同形。 */
-export interface ManualClaimPlanClaimedEntitlement {
-  entitlementId: string;
-  showName: string;
-  effectiveAt?: number;
-}
-
-export interface ManualClaimPlanClaimedPlan {
-  userPlanId: string;
-  planId: string;
-  status: string;
-  startsAt?: number;
-  endsAt?: number;
-  entitlements: ManualClaimPlanClaimedEntitlement[];
-}
-
-/**
- * 领取结果：业务失败（code!==0）不抛错，由调用方按 code/message 呈现；
- * 只有网络/非 JSON 响应才走异常路径。
- */
-export interface ManualClaimPlanClaimResult {
-  success: boolean;
-  code: number;
-  message: string;
-  serverTime?: number;
-  /** 服务端在失败结果里给出的领取窗口截止（秒级时间戳）。 */
-  failureEndsAt?: number;
-  plan?: ManualClaimPlanClaimedPlan;
-}
-
-/** client/configs 下发的 Aliyun captcha 配置；缺席或 enabled=false 时跳过验证码。 */
+/** zh: client/configs 下发的 Aliyun captcha 配置；缺席或 enabled=false 时跳过验证码。 */
 export interface ZCodeCaptchaConfig {
   region?: string;
   prefix?: string;
@@ -203,6 +171,31 @@ export interface ZCodeCaptchaConfig {
   enabled?: boolean;
   /** 服务端把 skip_model_request 归一成 skipModelRequest。 */
   skipModelRequest?: boolean;
+}
+
+export interface ManualClaimPlanClaimEntitlement {
+  entitlementId: string;
+  showName: string;
+  /** Claim 返回的权益生效时间，Unix 秒；0 表示立即生效。 */
+  effectiveAt?: number;
+}
+
+export interface ManualClaimPlanClaimResult {
+  success: boolean;
+  code: number;
+  message: string;
+  /** 失败响应中的活动结束时间，用于额度耗尽提示；不得当作已领取权益期限。 */
+  failureEndsAt?: number;
+  /** 领取接口返回的服务端时间（毫秒），不与其他响应的时间混用。 */
+  serverTime?: number;
+  plan?: {
+    userPlanId: string;
+    planId: string;
+    status: string;
+    startsAt?: number;
+    endsAt?: number;
+    entitlements?: ManualClaimPlanClaimEntitlement[];
+  };
 }
 
 export interface ForceUpdateConfig {

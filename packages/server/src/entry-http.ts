@@ -1,4 +1,4 @@
-import { createLocalServices, getAppConfigDir, startHeadlessAutomationRuntime } from "@zcode/services/node";
+import { createLocalServices, createTopicResourcePeers, getAppConfigDir, startHeadlessAutomationRuntime } from "@zcode/services/node";
 import {
   materializeBundledZCodeBuiltinProviderConfig,
   readBundledZCodeBuiltinProviderConfig,
@@ -14,10 +14,12 @@ async function main(): Promise<void> {
   const host = process.env["ZCODE_SERVER_HOST"]?.trim() || process.env["HOST"]?.trim() || undefined;
   const staticRoot = process.env["ZCODE_WEB_STATIC_ROOT"]?.trim() || undefined;
   const authToken = process.env["ZCODE_SERVER_AUTH_TOKEN"]?.trim() || undefined;
+  const topicResourcePeers = createTopicResourcePeers();
   // headless host 是 automation 的调度与派发者（desktop 由 main 进程的 scheduler 承担）。
   // manual run 落库后直接派发，不等下一轮 20s 轮询；runtime 在 services 装配完成后启动。
   let automationRuntime: ReturnType<typeof startHeadlessAutomationRuntime> | null = null;
   const services = createLocalServices({
+    topicResourceRelayChannel: (request) => topicResourcePeers.getChannel(request),
     zcodeBuiltinProviderConfigFilePath,
     providerProvisioningTargetEnabled: Boolean(authToken),
     onAutomationManualRunRequested: async (params) => {
@@ -30,6 +32,7 @@ async function main(): Promise<void> {
   automationRuntime = startHeadlessAutomationRuntime({ services });
 
   const server = createHttpServer(services, port, {
+    topicResourcePeers,
     ...(host ? { host } : {}),
     ...(staticRoot ? { staticRoot, spaFallback: true } : {}),
     ...(authToken ? { authToken, authRequired: true } : {}),

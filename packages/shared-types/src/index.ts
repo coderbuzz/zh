@@ -32,7 +32,6 @@ export type GlobalOptions = {
   browserUse?: "headless";
   detectedLocale?: GlobalDetectedLocale;
   effort?: string;
-  enableWorkflow?: boolean;
   force: boolean;
   json: boolean;
   locale?: GlobalLocale;
