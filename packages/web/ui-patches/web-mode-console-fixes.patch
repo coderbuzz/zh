@@ -1,5 +1,5 @@
 diff --git a/packages/ui/src/hooks/useZCodeAgentService.ts b/packages/ui/src/hooks/useZCodeAgentService.ts
-index 9e3d10a..7407656 100644
+index 9e3d10ae..74076566 100644
 --- a/packages/ui/src/hooks/useZCodeAgentService.ts
 +++ b/packages/ui/src/hooks/useZCodeAgentService.ts
 @@ -7,8 +7,16 @@ export function useZCodeAgentService(
@@ -24,7 +24,7 @@ index 9e3d10a..7407656 100644
 +    : contextServices.zcodeAgentService;
  }
 diff --git a/packages/ui/src/hooks/useZCodeSessionService.ts b/packages/ui/src/hooks/useZCodeSessionService.ts
-index 5eb983f..331b017 100644
+index 5eb983fd..331b0175 100644
 --- a/packages/ui/src/hooks/useZCodeSessionService.ts
 +++ b/packages/ui/src/hooks/useZCodeSessionService.ts
 @@ -7,8 +7,18 @@ export function useZCodeSessionService(
@@ -51,10 +51,10 @@ index 5eb983f..331b017 100644
 +    : contextServices.zcodeSessionService;
  }
 diff --git a/packages/ui/src/hooks/useZCodeTaskService.ts b/packages/ui/src/hooks/useZCodeTaskService.ts
-index cd9438a..e73428b 100644
+index 81322ebe..62494915 100644
 --- a/packages/ui/src/hooks/useZCodeTaskService.ts
 +++ b/packages/ui/src/hooks/useZCodeTaskService.ts
-@@ -294,9 +294,16 @@ export function useZCodeTaskService(
+@@ -306,9 +306,16 @@ export function useZCodeTaskService(
    workspaceIdentity?: string | null,
  ): IZCodeTaskService {
    // ZCode task 服务按 workspace 身份解析，保证所有 task RPC 都落到对应的 host。
@@ -75,10 +75,10 @@ index cd9438a..e73428b 100644
    if (!rawService || typeof rawService !== "object") {
      return rawService;
 diff --git a/packages/ui/src/v4/windowControllerTaskListRegistry.ts b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-index 1217819..d21c047 100644
+index 2ed02b34..d8bc4dcd 100644
 --- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
 +++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-@@ -64,6 +64,34 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
+@@ -83,6 +83,34 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
    });
  }
  
@@ -113,7 +113,7 @@ index 1217819..d21c047 100644
  /** 一个 Controller proxy 对应一个共享观察器；所有列表 hook 只消费其 revision。 */
  export function getWindowControllerTaskListRegistry(
    controller: IWindowControllerService,
-@@ -72,6 +100,7 @@ export function getWindowControllerTaskListRegistry(
+@@ -91,6 +119,7 @@ export function getWindowControllerTaskListRegistry(
    const existing = registries.get(key);
    if (existing) return existing;
  
@@ -121,7 +121,7 @@ index 1217819..d21c047 100644
    const listeners = new Set<() => void>();
    const cursors = new Map<string, WindowHostControllerCursor>();
    const subscriptionIds = new Set<string>();
-@@ -118,7 +147,7 @@ export function getWindowControllerTaskListRegistry(
+@@ -139,7 +168,7 @@ export function getWindowControllerTaskListRegistry(
    };
  
    const start = (): void => {
@@ -130,7 +130,7 @@ index 1217819..d21c047 100644
      started = true;
      const startGeneration = ++generation;
      frameDisposable = controller.onDynamicControllerFrame()((frame: WindowHostControllerFrame) => {
-@@ -198,9 +227,14 @@ export function getWindowControllerTaskListRegistry(
+@@ -230,9 +259,14 @@ export function getWindowControllerTaskListRegistry(
          }
          subscriptionIds.add(result.ack.subscriptionId);
        }),
@@ -148,8 +148,8 @@ index 1217819..d21c047 100644
    };
  
    const registry: WindowControllerTaskListRegistry = {
-@@ -216,10 +250,22 @@ export function getWindowControllerTaskListRegistry(
-       return revision;
+@@ -261,10 +295,22 @@ export function getWindowControllerTaskListRegistry(
+       );
      },
      list(queryKey, version, query) {
 +      if (unsupportedHost) {

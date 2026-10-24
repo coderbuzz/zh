@@ -10,9 +10,9 @@ permissions:
 
 env:
   # packages/web and the web-mode runtime build against the upstream monorepo
-  # checkout at the vendor branch baseline. Update when the vendor branch moves.
-  # beta: tracks upstream v3.15.1 (aac4755) ahead of the main vendor baseline.
-  ZCODE_VENDORED_REV: aac4755666d09fdcd70272fcf063c077a639015f
+  # checkout at this rev. Update when the upstream baseline moves
+  # (currently the "chore: sync ZCode source" commit for v3.16.2).
+  ZCODE_VENDORED_REV: 3c5b227649371507ddc4eb46ac5133afe6db1cab
 
 jobs:
   build-web:
