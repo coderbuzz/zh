@@ -148,7 +148,7 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
 `coderbuzz/zcode` is archived and nothing fetches from it.)
 
 - Baseline: `ZCODE_VENDORED_REV` in `.github/workflows/release.yml` (currently
-  v3.15.1, `aac4755`). The packages under `packages/` are committed copies that carry
+  v3.16.2, `3c5b2276`). The packages under `packages/` are committed copies that carry
   zh's local patch layer; the web dist is built in CI from an upstream checkout at that
   rev plus `packages/web/ui-patches/*.patch`.
 - Per release: in a plain clone of `zai-org/ZCode`, fetch the tag and diff it against the
@@ -168,7 +168,17 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
   specs excluded in the shared/bootstrap/services/client tsconfigs, and the
   manual-claim captcha layer on top of upstream's manual claim
   (`getCaptchaConfig`, Aliyun captcha headers, pinned
-  `ZCODE_MANUAL_CLAIM_CLIENT_VERSION`). zh-owned additions live in
+  `ZCODE_MANUAL_CLAIM_CLIENT_VERSION`), and `server/src/entry-http.ts`
+  running the host in local mode. Upstream's entry-http (v3.16) uses
+  `createServerHostServices`, a Source Server meant to be attached by the
+  desktop app: it owns tasks as host `remote:server:<hostname>`, rejects
+  tasks outside a project (`project.remote-project-required`) and needs the
+  desktop-side `bindRemoteProjectIdentities` for task groups
+  (`task-group.host-identity-mismatch`). zh's web client talks to the server
+  directly, so entry-http keeps `migrateApplicationStorage(settings)` plus
+  `createLocalServices` (host `local`, as desktop main and upstream
+  entry-stdio do) and adds the headless automation runtime. Do not switch it
+  back to `createServerHostServices` on a bump. zh-owned additions live in
   new files where possible (`cli/src/zh-model-flag.ts`, `providers-command.ts`,
   `web-account-bridge.ts`); the few vendored files they touch are `cli/src/{run,
   arguments,prompt-command,provider-runtime-env}.ts` and
@@ -182,6 +192,17 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
   shells. When testing "bare VM" behavior, strip every `ZCODE_*` var and use
   an isolated HOME: only `~/.zcode/v2/credentials.json` and
   `~/.zcode/v2/provider_config.json` are needed for auth.
+- **Isolate every test process from the real `~/.zcode` (VM data loss
+  risk).** Some upstream vitest specs and the agent runtime ignore the
+  `ZCODE_*` dirs: `~/.zcode/cli/**` (session db, rollouts, backups) resolves
+  through `os.homedir()`. A test run on 2026-10-25 migrated the production
+  tasks-index and session db. For vitest, `zh -p` and test web instances set
+  all of `HOME`, `ZCODE_DATA_BASE_DIR`, `ZCODE_DESKTOP_HOME_DIR` and
+  `ZCODE_HOME` to a temp dir, plus `ZCODE_CREDENTIAL_SECRET` set to the
+  fallback secret `credentialCipherProvider.ts` derives from the real home
+  (otherwise a copied `credentials.json` fails to decrypt and the OAuth
+  session is cleared). Copy sqlite files with the sqlite backup API, not
+  `cp`, and compare `~/.zcode` mtimes before and after.
 - **`~/.zcode/cli/plugins/cache/zcode-plugins-official/` masks missing
   plugins.** The desktop app seeds it; a repo without `official-plugins/`
   looked fine here and broke on a bare machine. Test browsing with an

@@ -3224,9 +3224,6 @@ export async function createServerHostServices(options: {
   sourceServerId: string;
   zcodeBuiltinProviderConfigFilePath: string;
   providerProvisioningTargetEnabled?: boolean;
-  onAutomationManualRunRequested?: NonNullable<
-    Parameters<typeof createLocalServices>[0]
-  >["onAutomationManualRunRequested"];
 }) {
   const projectStorageHostId = remoteHostIdFromWorkspaceIdentity(
     buildServerRemoteWorkspaceIdentity({ serverId: options.sourceServerId, workspacePath: "/" }),
@@ -3256,7 +3253,6 @@ export async function createServerHostServices(options: {
     topicResourceRelayChannel: options.topicResourceRelayChannel,
     projectStorageHostId,
     sourceServerWorkspaceService,
-    onAutomationManualRunRequested: options.onAutomationManualRunRequested,
   });
   return { services, workspaceIdentityMapper, migrationFailedPathCount };
 }
