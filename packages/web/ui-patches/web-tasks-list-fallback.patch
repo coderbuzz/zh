@@ -1,5 +1,28 @@
+diff --git a/packages/ui/src/v4/windowControllerTaskListRegistry.ts b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
+index d8bc4dcd..abfc27cd 100644
+--- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
++++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
+@@ -18,6 +18,8 @@ import { logger } from "@/logger.js";
+ export interface WindowControllerTaskListRegistry {
+   subscribe(listener: () => void): () => void;
+   getRevision(): number;
++  /** zh web: the host has no window-controller channel; callers list from the task service. */
++  isUnsupportedHost(): boolean;
+   getDirectoryRevision(): number;
+   getSourceRevision(): number;
+   readActivities(): Array<{
+@@ -281,6 +283,9 @@ export function getWindowControllerTaskListRegistry(
+     getRevision() {
+       return revision;
+     },
++    isUnsupportedHost() {
++      return unsupportedHost;
++    },
+     getDirectoryRevision() {
+       return directoryRevision;
+     },
 diff --git a/packages/ui/src/hooks/useGlobalTaskList.ts b/packages/ui/src/hooks/useGlobalTaskList.ts
-index ce0275b..49792b1 100644
+index ce0275b5..49792b1a 100644
 --- a/packages/ui/src/hooks/useGlobalTaskList.ts
 +++ b/packages/ui/src/hooks/useGlobalTaskList.ts
 @@ -148,7 +148,20 @@ export function useGlobalTaskList(params: {
@@ -52,26 +75,3 @@ index ce0275b..49792b1 100644
    const hasRemoteScope = params.workspaceTabs.some((tab) => Boolean(tab.workspaceIdentity));
    return {
      items,
-diff --git a/packages/ui/src/v4/windowControllerTaskListRegistry.ts b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-index d21c047..1423730 100644
---- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-+++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-@@ -18,6 +18,8 @@ import { logger } from "@/logger.js";
- export interface WindowControllerTaskListRegistry {
-   subscribe(listener: () => void): () => void;
-   getRevision(): number;
-+  /** zh web: the host has no window-controller channel; callers list from the task service. */
-+  isUnsupportedHost(): boolean;
-   list(
-     queryKey: string,
-     version: WindowControllerTaskListVersion,
-@@ -249,6 +251,9 @@ export function getWindowControllerTaskListRegistry(
-     getRevision() {
-       return revision;
-     },
-+    isUnsupportedHost() {
-+      return unsupportedHost;
-+    },
-     list(queryKey, version, query) {
-       if (unsupportedHost) {
-         return Promise.resolve(createEmptyTaskListResult());

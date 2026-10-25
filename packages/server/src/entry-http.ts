@@ -1,4 +1,11 @@
-import { createLocalServices, createTopicResourcePeers, getAppConfigDir, startHeadlessAutomationRuntime } from "@zcode/services/node";
+import {
+  createLocalServices,
+  createSettingService,
+  createTopicResourcePeers,
+  getAppConfigDir,
+  migrateApplicationStorage,
+  startHeadlessAutomationRuntime,
+} from "@zcode/services/node";
 import {
   materializeBundledZCodeBuiltinProviderConfig,
   readBundledZCodeBuiltinProviderConfig,
@@ -15,6 +22,10 @@ async function main(): Promise<void> {
   const staticRoot = process.env["ZCODE_WEB_STATIC_ROOT"]?.trim() || undefined;
   const authToken = process.env["ZCODE_SERVER_AUTH_TOKEN"]?.trim() || undefined;
   const topicResourcePeers = createTopicResourcePeers();
+  // zh 的 web UI 直接把本机当作 local host 使用（与 desktop main / entry-stdio 一致），
+  // 不走 Source Server（remote:server:<id>）模式：后者要求所有任务挂在项目下，
+  // 且任务分组需要 desktop 侧绑定的远端身份，zh web 客户端两者都不具备。
+  await migrateApplicationStorage(await createSettingService().get());
   // headless host 是 automation 的调度与派发者（desktop 由 main 进程的 scheduler 承担）。
   // manual run 落库后直接派发，不等下一轮 20s 轮询；runtime 在 services 装配完成后启动。
   let automationRuntime: ReturnType<typeof startHeadlessAutomationRuntime> | null = null;
