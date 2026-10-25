@@ -163,7 +163,12 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
   cli/sea-playwright-runtime), TUI re-exec through `dist/zcode.cjs`,
   official-plugins paths, the version fallback in cli/run.ts, the Bun
   bundler scripts (cli, tui), the enriched provider catalog, and the
-  playwright error-cause surfacing in adapters/browser. zh-owned additions live in
+  playwright error-cause surfacing in adapters/browser, `zod` declared in
+  core/package.json (upstream relies on pnpm hoisting), colocated vitest
+  specs excluded in the shared/bootstrap/services/client tsconfigs, and the
+  manual-claim captcha layer on top of upstream's manual claim
+  (`getCaptchaConfig`, Aliyun captcha headers, pinned
+  `ZCODE_MANUAL_CLAIM_CLIENT_VERSION`). zh-owned additions live in
   new files where possible (`cli/src/zh-model-flag.ts`, `providers-command.ts`,
   `web-account-bridge.ts`); the few vendored files they touch are `cli/src/{run,
   arguments,prompt-command,provider-runtime-env}.ts` and

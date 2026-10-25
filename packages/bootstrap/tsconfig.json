@@ -12,5 +12,7 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  // zh: colocated vitest specs need upstream's root vitest; zh does not ship it.
+  "exclude": ["src/**/*.test.ts"]
 }

@@ -1,8 +1,8 @@
 import type {
+  RequestVerificationConfig,
   CodingPlanAgreementResponse,
   CodingPlanBatchPreviewRequest,
   CodingPlanBatchPreviewResponse,
-  CodingPlanBillingDiscountConfig,
   CodingPlanCreateSignRequest,
   CodingPlanPaymentCheckRequest,
   CodingPlanPaymentCheckResponse,
@@ -16,6 +16,7 @@ import type {
   CodingPlanPaypalSupportResponse,
   CodingPlanProductInfo,
   CodingPlanProductInfoRequest,
+  CodingPlanBillingDiscountConfig,
   CodingPlanStaticProductsConfig,
   CodingPlanStaticTeamProductsConfig,
   CodingPlanPreviewRequest,
@@ -41,12 +42,12 @@ import type {
   EnterpriseCodingPlanPricingRequest,
   EnterpriseCodingPlanPricingResponse,
   StartPlanPreviewConfig,
-  ManualClaimPlanClaimRequest,
-  ManualClaimPlanClaimResult,
-  ManualClaimPlanPreviewsResponse,
   ZCodeCaptchaConfig,
   ZCodeModelContextBudgetStrategy,
   ForceUpdateConfig,
+  ManualClaimPlanPreviewSnapshot,
+  ManualClaimPlanClaimRequest,
+  ManualClaimPlanClaimResult,
   DynamicWorkflowClientConfig,
 } from "@zcode/shared";
 import type { ModelSelectionView } from "@zcode/provider";
@@ -65,15 +66,11 @@ export interface ICodingPlanSubscriptionService {
   getStaticProducts(): Promise<CodingPlanStaticProductsConfig>;
   getStaticTeamProducts(): Promise<CodingPlanStaticTeamProductsConfig>;
   getStartPlanPreview(): Promise<StartPlanPreviewConfig | null>;
-  /** 限时优惠文案配置（client/configs 快照）；字段缺席返回 undefined。 */
-  getBillingDiscount(): Promise<CodingPlanBillingDiscountConfig | undefined>;
-  /** 免费套餐（manual claim）可领取列表；未登录时返回匿名可见 offer。 */
-  getManualClaimPlanPreviews(): Promise<ManualClaimPlanPreviewsResponse>;
-  /** 领取免费套餐；业务失败折叠进 result（不抛错）。 */
+  getManualClaimPlanPreviews(): Promise<ManualClaimPlanPreviewSnapshot>;
   claimManualPlan(request: ManualClaimPlanClaimRequest): Promise<ManualClaimPlanClaimResult>;
-  /** Aliyun captcha 配置（client/configs 快照）；缺席返回 null，调用方据此跳过验证码。 */
+  /** zh: Aliyun captcha 配置（client/configs 快照）；缺席返回 null，调用方据此跳过验证码。 */
   getCaptchaConfig(): Promise<ZCodeCaptchaConfig | null>;
-  /** 闲时任务灰度配置：forceRefresh 供入口打开时补拉（绕过 1h 快照缓存）。 */
+  /** 闲时任务灰度配置（D31）：forceRefresh 供入口打开时补拉（绕过 1h 快照缓存）。 */
   getOffPeakClientConfig(options?: { forceRefresh?: boolean }): Promise<OffPeakClientConfig>;
   /**
    * 动态工作流灰度快照：远端 `configs.dynamicWorkflow.mode`
@@ -84,6 +81,8 @@ export interface ICodingPlanSubscriptionService {
   }): Promise<DynamicWorkflowClientConfig>;
   /** 兼容接口：固定返回 preflight-v1，不读取远端配置或缓存。 */
   getModelContextBudgetStrategy(): Promise<ZCodeModelContextBudgetStrategy>;
+  getBillingDiscount(): Promise<CodingPlanBillingDiscountConfig | undefined>;
+  getRequestVerificationConfig(): Promise<RequestVerificationConfig | null>;
   getForceUpdateConfig(): Promise<ForceUpdateConfig | null>;
   productInfo(request: CodingPlanProductInfoRequest): Promise<CodingPlanProductInfo>;
   preview(request: CodingPlanPreviewRequest): Promise<CodingPlanPreviewResponse>;
