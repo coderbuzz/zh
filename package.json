@@ -1,6 +1,6 @@
 {
   "name": "zcode-headless",
-  "version": "0.5.20",
+  "version": "0.5.22",
   "private": true,
   "license": "MIT",
   "type": "module",
