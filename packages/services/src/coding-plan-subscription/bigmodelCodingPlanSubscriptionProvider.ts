@@ -1,6 +1,7 @@
 import {
+  ApiError,
   parseMarketingTouchResponse,
-  readRequestVerificationConfig,
+  readValidatedRequestVerificationConfig,
   requestVerificationClaimHeaders,
   isRequestVerificationMessage,
   type RequestVerificationClientConfig,
@@ -107,9 +108,9 @@ const ZCODE_MARKETING_TOUCH_API_PATH = "/api/v1/marketing/touch";
  * 2026-10-04: query app_version 3.14.3/3.14.4 returned the Trust Build offer
  * while 0.5.3 returned none (the header variant was proven irrelevant).
  * Bump this alongside the vendor baseline (ZCODE_VENDORED_REV in
- * .github/workflows/release.yml) when it moves — currently v3.15.1.
+ * .github/workflows/release.yml) when it moves — currently v3.17.1.
  */
-export const ZCODE_MANUAL_CLAIM_CLIENT_VERSION = "3.16.2";
+export const ZCODE_MANUAL_CLAIM_CLIENT_VERSION = "3.17.1";
 const REQUEST_TIMEOUT_MS = 15_000;
 const CLIENT_CONFIG_CACHE_TTL_MS = 60 * 60 * 1000;
 const CODING_PLAN_ZAI_OVERSEAS_PAYMENT_REQUIRED = "coding_plan_zai_overseas_payment_required";
@@ -540,7 +541,12 @@ export class BigModelCodingPlanSubscriptionProvider {
   }
 
   async getRequestVerificationConfig(): Promise<RequestVerificationConfig | null> {
-    return readRequestVerificationConfig((await this.getClientConfigs()).data?.configs);
+    const payload = await this.getClientConfigs();
+    // HTTP 成功不等于配置有效；坏配置不能按网络故障自动重试，更不能打开跳过校验。
+    if ((payload.code !== undefined && payload.code !== 0) || payload.success === false) {
+      throw new Error("Request verification configuration is invalid");
+    }
+    return readValidatedRequestVerificationConfig(payload.data?.configs);
   }
 
   async getForceUpdateConfig(): Promise<ForceUpdateConfig | null> {
@@ -1576,6 +1582,18 @@ async function readCodingPlanApiJson<T>(
     if (isUnrenderableRemoteErrorMessage(message)) {
       // 支付接口偶发返回 WAF/HTML 页面或非 JSON 响应，原样透传会把整段
       // HTML 渲到确认支付页。服务边界先收敛为稳定错误码，UI 再做本地化提示。
+      // HTML 只影响展示，不能丢掉 HTTP 状态和传输原因，否则配置读取无法区分 503 与 401。
+      if (error instanceof ApiError) {
+        throw new ApiError({
+          message: CODING_PLAN_SYSTEM_BUSY,
+          url: error.url,
+          method: error.method,
+          status: error.status,
+          responseHeaders: error.responseHeaders,
+          // 原 ApiError.message 可能是完整 HTML；只延续底层 cause，不把正文重新带入错误链。
+          cause: error.cause,
+        });
+      }
       throw new Error(CODING_PLAN_SYSTEM_BUSY);
     }
     throw error;

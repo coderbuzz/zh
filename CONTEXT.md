@@ -148,7 +148,7 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
 `coderbuzz/zcode` is archived and nothing fetches from it.)
 
 - Baseline: `ZCODE_VENDORED_REV` in `.github/workflows/release.yml` (currently
-  v3.16.2, `3c5b2276`). The packages under `packages/` are committed copies that carry
+  v3.17.1, `a60ba6a7`). The packages under `packages/` are committed copies that carry
   zh's local patch layer; the web dist is built in CI from an upstream checkout at that
   rev plus `packages/web/ui-patches/*.patch`.
 - Per release: in a plain clone of `zai-org/ZCode`, fetch the tag and diff it against the
