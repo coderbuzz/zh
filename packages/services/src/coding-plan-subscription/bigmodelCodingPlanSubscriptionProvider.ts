@@ -1,4 +1,5 @@
 import {
+  parseMarketingTouchResponse,
   readRequestVerificationConfig,
   requestVerificationClaimHeaders,
   isRequestVerificationMessage,
@@ -85,6 +86,7 @@ import {
 } from "@zcode/shared";
 import type { ICredentialService } from "../credential/credential.js";
 import { readApiJson } from "../providers/api/apiJson.js";
+import { ensureTelemetryDeviceMid } from "../telemetry/telemetryCore.js";
 import { createServiceLogger } from "../logger/serviceLogger.js";
 import {
   ensureBigModelTeamPlanProjectApiKeyWithStatus,
@@ -97,6 +99,7 @@ const ZAI_CODING_PLAN_PAY_API_PREFIX = "/api/pay";
 const ZCODE_CLIENT_CONFIG_API_PREFIX = "/api/v1/client/configs";
 const ZCODE_MANUAL_CLAIM_PREVIEW_API_PATH = "/api/v1/zcode-plan/billing/preview";
 const ZCODE_MANUAL_CLAIM_CLAIM_API_PATH = "/api/v1/zcode-plan/billing/claim";
+const ZCODE_MARKETING_TOUCH_API_PATH = "/api/v1/marketing/touch";
 /**
  * Manual-claim eligibility is keyed on the upstream client version: the server
  * returns empty plans (preview) and refuses claims for unknown versions, and
@@ -317,10 +320,14 @@ export class BigModelCodingPlanSubscriptionProvider {
     if (payload.code !== undefined && payload.code !== 0) {
       throw new Error(payload.msg?.trim() || "manual_claim_preview_failed");
     }
-    if (!payload.data) {
+    // zh: server kini mengirim offer lewat marketing/touch; billing/preview kembali tanpa data.
+    const data =
+      token && !payload.data?.plans?.length
+        ? await this.readMarketingTouchClaimPlans(token)
+        : payload.data;
+    if (!data) {
       throw new Error(payload.msg?.trim() || "manual_claim_preview_missing_data");
     }
-    const data = payload.data;
     const serverTime = readServerTimeMilliseconds(data.server_time);
     const plans = (data.plans ?? []).flatMap((plan) => {
       const planId = plan.plan_id?.trim() ?? "";
@@ -356,6 +363,35 @@ export class BigModelCodingPlanSubscriptionProvider {
       ];
     });
     return { ...(serverTime === undefined ? {} : { serverTime }), plans };
+  }
+
+  // ponytail: hanya banner claim_zcode_plan; popup dan report aksi marketing tidak dipakai banner zh.
+  private async readMarketingTouchClaimPlans(token: string): Promise<ManualClaimPlanPreviewPayload> {
+    const url = new URL(buildRuntimeZCodeApiUrl(process.env, ZCODE_MARKETING_TOUCH_API_PATH));
+    url.searchParams.set("seq", "0");
+    const snapshot = parseMarketingTouchResponse(
+      await readCodingPlanApiJson<unknown>(this.apiClient, url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Device-Mid": await ensureTelemetryDeviceMid(),
+          "X-Client-Language": "en-US",
+          "X-ZCode-App-Version": ZCODE_MANUAL_CLAIM_CLIENT_VERSION,
+        },
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      }),
+    );
+    const plans = snapshot.deliveries.flatMap((delivery) => {
+      if (delivery.resource_position !== "banner") return [];
+      const plan = delivery.banner.background.args?.zcode_plan as
+        | NonNullable<ManualClaimPlanPreviewPayload["plans"]>[number]
+        | undefined;
+      const claimable = delivery.banner.buttons.some(
+        ({ action }) => action.type === "claim_zcode_plan" && action.args.plan_id === plan?.plan_id,
+      );
+      return plan && claimable ? [plan] : [];
+    });
+    return { server_time: snapshot.serverTime / 1000, plans };
   }
 
   async claimManualPlan(request: ManualClaimPlanClaimRequest): Promise<ManualClaimPlanClaimResult> {

@@ -132,6 +132,61 @@ test("getManualClaimPlanPreviews normalizes the snake_case envelope and appends 
   assert.equal(headers.get("Authorization"), "Bearer jwt-token");
 });
 
+test("getManualClaimPlanPreviews reads the banner plan from marketing/touch when billing/preview has no data", async () => {
+  const plan = {
+    plan_id: "plan-weekend",
+    name: "ZCODE WEEKEND BUILD",
+    entitlements: [
+      { entitlement_id: "ent-1", show_name: "GLM-5.3-Flash", unit_type: "token", grant_units: 500_000_000 },
+    ],
+  };
+  const visual = {
+    type: "bundle",
+    bundle: { bundle: { src: "https://cdn.example/a.zip", sha256: "a".repeat(64) }, entry: "index.html" },
+    args: { zcode_plan: plan },
+  };
+  const delivery = (planId: string) => ({
+    campaign_id: "c1",
+    resource_position: "banner",
+    priority: 50,
+    banner: {
+      background: visual,
+      buttons: [
+        {
+          text: { format: "", content: "" },
+          action: { type: "claim_zcode_plan", args: { plan_id: planId } },
+        },
+      ],
+    },
+  });
+  for (const [claimPlanId, expected] of [["plan-weekend", 1], ["other-plan", 0]] as const) {
+    const { client, calls } = createStubApiClient([
+      { match: (url) => url.startsWith(PREVIEW_URL_PREFIX), respond: () => ({ code: 0, msg: "" }) },
+      {
+        match: (url) => url.includes("/api/v1/marketing/touch"),
+        respond: () => ({
+          code: 0,
+          data: { server_time: 1000, language: "en-US", deliveries: [delivery(claimPlanId)] },
+        }),
+      },
+    ]);
+    const provider = createProvider(
+      client,
+      createStubCredentialService(new Map([["zcodejwttoken", "jwt-1"]])),
+    );
+    const previews = await provider.getManualClaimPlanPreviews();
+    assert.equal(previews.plans.length, expected);
+    assert.equal(previews.serverTime, 1_000_000);
+    if (expected) {
+      assert.equal(previews.plans[0]!.planId, "plan-weekend");
+      assert.equal(previews.plans[0]!.entitlements[0]!.grantUnits, 500_000_000);
+    }
+    const headers = new Headers(calls[1]!.init?.headers);
+    assert.equal(headers.get("Authorization"), "Bearer jwt-1");
+    assert.match(headers.get("X-Device-Mid") ?? "", /^[0-9a-f-]{36}$/);
+  }
+});
+
 test("getManualClaimPlanPreviews omits the Authorization header without a token and fails on error envelopes", async () => {
   const { client, calls } = createStubApiClient([
     {
