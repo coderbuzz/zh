@@ -37,9 +37,12 @@ const SIDEBAR_VISIBILITY_EVENT = "zh:sidebar-visibility";
 const NAVIGATING_SELECTOR = [
   '[data-testid^="task-item-"]',
   // The sidebar's top "New task" row is NewTaskButtonGroup (task-new-button);
-  // conversation-new-task is the per-project + icon, a different element.
+  // the + icons in section/group headers are different elements.
   '[data-testid="task-new-button"]',
   '[data-testid="conversation-new-task"]',
+  // Tasks section header + icon (3.17 PurposeSections) and the per-group + icon.
+  '[data-testid="virtual-project-new-task"]',
+  '[data-testid="task-group-new-task"]',
   '[data-testid="automations-open"]',
   '[data-testid="plugin-store-sidebar-open"]',
   '[data-testid="task-settings-button"]',

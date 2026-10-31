@@ -1,4 +1,5 @@
 import { STORAGE_MIGRATION_COMMAND } from "@zcode/shared/sqlite-migrations";
+import { ZCODE_APP_VERSION_ENV, ZCODE_VENDORED_APP_VERSION } from "@zcode/shared";
 import { interceptTuiStderr, isTuiInvocation } from "./tui-stderr.js";
 import { interceptKnownRuntimeWarnings } from "./runtime-warnings.js";
 import { installStderrConsoleBoundary } from "./protocol-console.js";
@@ -21,6 +22,8 @@ async function main(): Promise<void> {
   // 真实 zcode CLI 进程里仍可能有少量路径直接读取 process.env。
   // 入口先清洗用户 shell 注入的 NODE_ENV、代理和证书变量；网络变量只封存给后续 Bash/tool 子进程恢复。
   applyCliRuntimeEnvSanitization(process.env);
+  // Model headers need the vendored upstream version (children inherit it); `zh version` is unaffected.
+  process.env[ZCODE_APP_VERSION_ENV] ||= ZCODE_VENDORED_APP_VERSION;
   const isProtocol = argv[0] === STORAGE_MIGRATION_COMMAND || isProtocolServerInvocation(argv);
   const isTui = isTuiInvocation(argv);
   if (isProtocol) installProtocolStderrBoundary(process.stderr);
