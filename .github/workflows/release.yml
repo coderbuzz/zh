@@ -11,7 +11,7 @@ permissions:
 env:
   # packages/web and the web-mode runtime build against the upstream monorepo
   # checkout at the vendor branch baseline. Update when the vendor branch moves.
-  # Upstream v3.17.1.
+  # Upstream v3.17.1. Bump ZCODE_VENDORED_APP_VERSION (packages/shared/src/env.ts) with it.
   ZCODE_VENDORED_REV: a60ba6a7e5a06742270ca605f5d2cc2766afa7e1
 
 jobs:

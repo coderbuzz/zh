@@ -153,7 +153,9 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
   rev plus `packages/web/ui-patches/*.patch`.
 - Per release: in a plain clone of `zai-org/ZCode`, fetch the tag and diff it against the
   current rev. Port what zh needs onto `main` on a working branch, bump
-  `ZCODE_VENDORED_REV`, rework `ui-patches` that no longer apply (verify in alphabetical
+  `ZCODE_VENDORED_REV` **and `ZCODE_VENDORED_APP_VERSION`** (`packages/shared/src/env.ts`; the
+  CLI entry defaults `ZCODE_APP_VERSION` to it and `ZCODE_MANUAL_CLAIM_CLIENT_VERSION` reuses it —
+  a mismatch with the prompt prefix makes Z.AI Start Plan answer HTTP 405), rework `ui-patches` that no longer apply (verify in alphabetical
   glob order, as CI does; some patches build on earlier ones), then `sh build-all.sh`
   and a `zh web` smoke test.
 - Patch layer to keep or drop consciously on each bump: Bun-safe `node:sea`

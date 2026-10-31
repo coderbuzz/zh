@@ -41,6 +41,14 @@ export const ZCODE_PRODUCT_FLAVOR = normalizeZCodeProductFlavor(
   ZCODE_ENV,
 );
 export const ZCODE_APP_VERSION_ENV = "ZCODE_APP_VERSION" as const;
+/**
+ * Upstream ZCode version zh is vendored from. The server matches the system prompt
+ * (upstream prefix) against X-ZCode-App-Version and blocks mismatches (HTTP 405 on Z.AI
+ * Start Plan), so zh's own 0.x version must never go in that header; the CLI entry
+ * defaults ZCODE_APP_VERSION to this. Bump with ZCODE_VENDORED_REV in
+ * .github/workflows/release.yml.
+ */
+export const ZCODE_VENDORED_APP_VERSION = "3.17.1";
 export const ZCODE_BUILD_COMMIT_ID_ENV = "ZCODE_BUILD_COMMIT_ID" as const;
 
 // ── 运行时环境变量（不经过编译打包，启动时从 process.env 读取） ──
