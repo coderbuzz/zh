@@ -75,10 +75,10 @@ index 81322ebe..62494915 100644
    if (!rawService || typeof rawService !== "object") {
      return rawService;
 diff --git a/packages/ui/src/v4/windowControllerTaskListRegistry.ts b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-index 2ed02b34..d8bc4dcd 100644
+index febdffce..61360073 100644
 --- a/packages/ui/src/v4/windowControllerTaskListRegistry.ts
 +++ b/packages/ui/src/v4/windowControllerTaskListRegistry.ts
-@@ -83,6 +83,34 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
+@@ -84,6 +84,34 @@ function cacheVersionKey(version: WindowControllerTaskListVersion): string {
    });
  }
  
@@ -113,7 +113,7 @@ index 2ed02b34..d8bc4dcd 100644
  /** 一个 Controller proxy 对应一个共享观察器；所有列表 hook 只消费其 revision。 */
  export function getWindowControllerTaskListRegistry(
    controller: IWindowControllerService,
-@@ -91,6 +119,7 @@ export function getWindowControllerTaskListRegistry(
+@@ -92,6 +120,7 @@ export function getWindowControllerTaskListRegistry(
    const existing = registries.get(key);
    if (existing) return existing;
  
@@ -121,7 +121,7 @@ index 2ed02b34..d8bc4dcd 100644
    const listeners = new Set<() => void>();
    const cursors = new Map<string, WindowHostControllerCursor>();
    const subscriptionIds = new Set<string>();
-@@ -139,7 +168,7 @@ export function getWindowControllerTaskListRegistry(
+@@ -140,7 +169,7 @@ export function getWindowControllerTaskListRegistry(
    };
  
    const start = (): void => {
@@ -130,7 +130,7 @@ index 2ed02b34..d8bc4dcd 100644
      started = true;
      const startGeneration = ++generation;
      frameDisposable = controller.onDynamicControllerFrame()((frame: WindowHostControllerFrame) => {
-@@ -230,9 +259,14 @@ export function getWindowControllerTaskListRegistry(
+@@ -232,9 +261,14 @@ export function getWindowControllerTaskListRegistry(
          }
          subscriptionIds.add(result.ack.subscriptionId);
        }),
@@ -148,20 +148,15 @@ index 2ed02b34..d8bc4dcd 100644
    };
  
    const registry: WindowControllerTaskListRegistry = {
-@@ -261,10 +295,22 @@ export function getWindowControllerTaskListRegistry(
+@@ -263,13 +297,25 @@ export function getWindowControllerTaskListRegistry(
        );
      },
      list(queryKey, version, query) {
 +      if (unsupportedHost) {
 +        return Promise.resolve(createEmptyTaskListResult());
 +      }
-       const versionKey = cacheVersionKey(version);
-       const cached = queryCache.get(queryKey);
-       if (cached?.versionKey === versionKey) return cached.promise;
--      const promise = controller.listTaskList(query);
-+      const promise = controller
-+        .listTaskList(query)
-+        .catch((error) => {
++      const readTaskList = () =>
++        controller.listTaskList(query).catch((error) => {
 +          if (isUnknownChannelError(error)) {
 +            unsupportedHost = true;
 +            queryCache.clear();
@@ -169,6 +164,15 @@ index 2ed02b34..d8bc4dcd 100644
 +          }
 +          throw error;
 +        });
+       // 未打开工作区不在 Controller 的 source 订阅中，不能用它的 delta 保证全局缓存有效。
+       // 搜索每次读取 Host；hook 只订阅目录变化，流式 activity 不触发全库搜索。
+-      if (query.workspaceScopes === "host") return controller.listTaskList(query);
++      if (query.workspaceScopes === "host") return readTaskList();
+       const versionKey = cacheVersionKey(version);
+       const cached = queryCache.get(queryKey);
+       if (cached?.versionKey === versionKey) return cached.promise;
+-      const promise = controller.listTaskList(query);
++      const promise = readTaskList();
        const entry = { versionKey, promise, query };
        queryCache.set(queryKey, entry);
        void promise.catch(() => {

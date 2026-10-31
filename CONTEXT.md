@@ -148,7 +148,7 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
 `coderbuzz/zcode` is archived and nothing fetches from it.)
 
 - Baseline: `ZCODE_VENDORED_REV` in `.github/workflows/release.yml` (currently
-  v3.16.2, `3c5b2276`). The packages under `packages/` are committed copies that carry
+  v3.17.1, `a60ba6a7`). The packages under `packages/` are committed copies that carry
   zh's local patch layer; the web dist is built in CI from an upstream checkout at that
   rev plus `packages/web/ui-patches/*.patch`.
 - Per release: in a plain clone of `zai-org/ZCode`, fetch the tag and diff it against the
@@ -178,7 +178,9 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
   directly, so entry-http keeps `migrateApplicationStorage(settings)` plus
   `createLocalServices` (host `local`, as desktop main and upstream
   entry-stdio do) and adds the headless automation runtime. Do not switch it
-  back to `createServerHostServices` on a bump. zh-owned additions live in
+  back to `createServerHostServices` on a bump. Official plugin packages stay
+  unvendored unless listed in `official-plugins/` (so `zcode-site-plugin`, ZCode
+  Sites, is unavailable in zh). zh-owned additions live in
   new files where possible (`cli/src/zh-model-flag.ts`, `providers-command.ts`,
   `web-account-bridge.ts`); the few vendored files they touch are `cli/src/{run,
   arguments,prompt-command,provider-runtime-env}.ts` and
