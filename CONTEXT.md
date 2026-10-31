@@ -178,7 +178,9 @@ branch, `scripts/sync-vendor.sh` and the `vendor/v3.14.x` merge flow were retire
   directly, so entry-http keeps `migrateApplicationStorage(settings)` plus
   `createLocalServices` (host `local`, as desktop main and upstream
   entry-stdio do) and adds the headless automation runtime. Do not switch it
-  back to `createServerHostServices` on a bump. zh-owned additions live in
+  back to `createServerHostServices` on a bump. Official plugin packages stay
+  unvendored unless listed in `official-plugins/` (so `zcode-site-plugin`, ZCode
+  Sites, is unavailable in zh). zh-owned additions live in
   new files where possible (`cli/src/zh-model-flag.ts`, `providers-command.ts`,
   `web-account-bridge.ts`); the few vendored files they touch are `cli/src/{run,
   arguments,prompt-command,provider-runtime-env}.ts` and
